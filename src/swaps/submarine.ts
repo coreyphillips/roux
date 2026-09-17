@@ -3,7 +3,8 @@
  * its refund.
  *
  *   create (submarine-client.ts)  record persisted CREATED with the refund
- *                                 key, nothing funded
+ *                                 key (or the id that derives it), nothing
+ *                                 funded
  *   fund()                        fundingAttempt persisted BEFORE the funder
  *                                 is asked; the outpoint verified and
  *                                 recorded when it answers
@@ -44,6 +45,7 @@ import { IPeerLink } from '../link/types';
 import { exchange } from '../link/exchange';
 import { SubmarineSwapStore } from './store';
 import { feeForRate, bumpedFeeRate, replacementFloor } from './fees';
+import { submarineRefundKey } from './secrets';
 import { isClaimWitness, verifyFundingOutput } from './verify';
 import {
 	ISubmarineSwapChange,
@@ -54,6 +56,7 @@ import {
 	ISwapFunder,
 	ISwapInvoiceStatus,
 	ISwapLightningPayer,
+	ISwapSecretProvider,
 	SwapError,
 	isTerminalSubmarineSwapState
 } from './types';
@@ -66,6 +69,8 @@ export interface ISubmarineSwapDeps {
 	store: SubmarineSwapStore;
 	policy: ISwapClientPolicy;
 	log: RouxLog;
+	/** Derives the refund key when the record does not hold it. */
+	secrets?: ISwapSecretProvider;
 	/** Told after every persisted state change. */
 	notify?: (change: ISubmarineSwapChange) => void;
 }
@@ -776,6 +781,7 @@ export class SubmarineSwap {
 			opts.feeRateSatPerVb ??
 			(await this.deps.chain.estimateFeeRateSatPerVb?.(2)) ??
 			this.deps.policy.defaultFeeRateSatPerVb;
+		const privateKey = await submarineRefundKey(this.rec, this.deps.secrets);
 		const built = feeForRate(
 			(feeSat) =>
 				swaps.buildSwapRefundTx({
@@ -787,7 +793,7 @@ export class SubmarineSwap {
 						'hex'
 					),
 					feeSatoshis: feeSat,
-					privateKey: Buffer.from(this.rec.refundPrivkeyHex, 'hex')
+					privateKey
 				}),
 			rate,
 			{ maxFeeSat: this.deps.policy.maxRefundFeeSat }
@@ -969,6 +975,7 @@ export class SubmarineSwap {
 		const rate = bumpedFeeRate(latest.feeRateSatPerVb, this.deps.policy);
 		let built;
 		try {
+			const privateKey = await submarineRefundKey(this.rec, this.deps.secrets);
 			built = feeForRate(
 				(feeSat) =>
 					swaps.buildSwapRefundTx({
@@ -980,7 +987,7 @@ export class SubmarineSwap {
 							'hex'
 						),
 						feeSatoshis: feeSat,
-						privateKey: Buffer.from(this.rec.refundPrivkeyHex, 'hex')
+						privateKey
 					}),
 				rate,
 				{ maxFeeSat: this.deps.policy.maxRefundFeeSat }

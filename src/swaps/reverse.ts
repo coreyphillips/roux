@@ -38,6 +38,7 @@ import { IPeerLink } from '../link/types';
 import { exchange } from '../link/exchange';
 import { ReverseSwapStore } from './store';
 import { claimFeeForRate, bumpedFeeRate, replacementFloor } from './fees';
+import { reverseSwapSecrets } from './secrets';
 import { isRefundWitness, verifyFundingOutput } from './verify';
 import {
 	IReverseSwapChange,
@@ -46,6 +47,7 @@ import {
 	ISwapClientPolicy,
 	ISwapLightningPayer,
 	ISwapPaymentStatus,
+	ISwapSecretProvider,
 	SwapError,
 	isTerminalReverseSwapState
 } from './types';
@@ -57,6 +59,8 @@ export interface IReverseSwapDeps {
 	store: ReverseSwapStore;
 	policy: ISwapClientPolicy;
 	log: RouxLog;
+	/** Derives the claim key and preimage when the record does not hold them. */
+	secrets?: ISwapSecretProvider;
 	/** Told after every persisted state change. */
 	notify?: (change: IReverseSwapChange) => void;
 }
@@ -583,9 +587,9 @@ export class ReverseSwap {
 		if (!funding) {
 			throw new SwapError('no funding is recorded for this swap', 'state');
 		}
-		// Preparation first: the funding bytes, the fee estimate and the
-		// signed claim. Every one of these awaits a backend, and the world
-		// moves while they do.
+		// Preparation first: the funding bytes, the fee estimate, the secrets
+		// and the signed claim. Every one of these awaits a backend, and the
+		// world moves while they do.
 		const raw = await this.deps.chain.getTransaction(
 			funding.txidHex,
 			funding.confirmedHeight
@@ -599,6 +603,10 @@ export class ReverseSwap {
 			opts.feeRateSatPerVb ??
 			(await this.deps.chain.estimateFeeRateSatPerVb?.(2)) ??
 			this.deps.policy.defaultFeeRateSatPerVb;
+		const { privateKey, preimage } = await reverseSwapSecrets(
+			this.rec,
+			this.deps.secrets
+		);
 		const built = claimFeeForRate(
 			(feeSat) =>
 				swaps.buildSwapClaimTx({
@@ -607,8 +615,8 @@ export class ReverseSwap {
 					outputIndex: funding.vout,
 					destinationScript: Buffer.from(this.rec.destinationScriptHex, 'hex'),
 					feeSatoshis: feeSat,
-					privateKey: Buffer.from(this.rec.claimPrivkeyHex, 'hex'),
-					preimage: Buffer.from(this.rec.preimageHex, 'hex')
+					privateKey,
+					preimage
 				}),
 			rate,
 			this.deps.policy
@@ -763,6 +771,10 @@ export class ReverseSwap {
 		const rate = bumpedFeeRate(latest.feeRateSatPerVb, this.deps.policy);
 		let built;
 		try {
+			const { privateKey, preimage } = await reverseSwapSecrets(
+				this.rec,
+				this.deps.secrets
+			);
 			built = claimFeeForRate(
 				(feeSat) =>
 					swaps.buildSwapClaimTx({
@@ -774,8 +786,8 @@ export class ReverseSwap {
 							'hex'
 						),
 						feeSatoshis: feeSat,
-						privateKey: Buffer.from(this.rec.claimPrivkeyHex, 'hex'),
-						preimage: Buffer.from(this.rec.preimageHex, 'hex')
+						privateKey,
+						preimage
 					}),
 				rate,
 				this.deps.policy

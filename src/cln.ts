@@ -48,6 +48,8 @@ export interface IClnClientOptions
 	reserveBlocks?: number;
 	/** Chain access for swaps (BitcoinCoreChain, ElectrumChain); omit for quotes only. */
 	chain?: NonNullable<IBeignetClientOptions['swaps']>['chain'];
+	/** Keeps the swap keys and preimages out of the records (FileSecretProvider). */
+	secrets?: NonNullable<IBeignetClientOptions['swaps']>['secrets'];
 	policy?: NonNullable<IBeignetClientOptions['swaps']>['policy'];
 	destination?: NonNullable<IBeignetClientOptions['swaps']>['destination'];
 }
@@ -84,6 +86,7 @@ export function createClnClient(options: IClnClientOptions): BeignetClient {
 			payer: new ClnPayer({ ...rest, network: options.network }),
 			funder: new ClnFunder({ ...rest, network: options.network }),
 			chain: options.chain,
+			secrets: options.secrets,
 			policy: options.policy,
 			destination: options.destination
 		},

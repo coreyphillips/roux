@@ -3,13 +3,16 @@
  * keys `swaps:reverse` and `swaps:submarine` of the host's
  * IWalletDataStorage.
  *
- * Unlike the direct-funding payment record, a swap record IS key material:
- * a reverse record holds the claim private key and the preimage, a
- * submarine record the refund private key, because a claim or refund after
- * a crash needs exactly those. A host must treat the storage it hands
- * roux as it would a wallet file (encrypt at rest, restrict its mode). A
- * key-deriving hook, so nothing secret is written, is a documented
- * follow-up (roux issue #1) for both directions.
+ * Unlike the direct-funding payment record, a swap record is key material
+ * by default: a reverse record holds the claim private key and the
+ * preimage, a submarine record the refund private key, because a claim or
+ * refund after a crash needs exactly those. A host must then treat the
+ * storage it hands roux as it would a wallet file (encrypt at rest,
+ * restrict its mode). With an ISwapSecretProvider (`swaps.secrets`, see
+ * secrets.ts) the records hold only public material and the id the secrets
+ * derive from, and the provider's seed is what needs the wallet file's
+ * care; the records still have to be durable, since losing the id loses
+ * the secrets with it.
  */
 
 import { IWalletDataStorage } from '../storage';

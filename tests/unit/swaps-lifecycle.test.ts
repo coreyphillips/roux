@@ -159,7 +159,7 @@ describe('ReverseSwap lifecycle', function () {
 		const claimTxid = swap.record().claim!.attempts[0].txidHex;
 		s.payer.settle(
 			swap.record().paymentHashHex,
-			Buffer.from(swap.record().preimageHex, 'hex')
+			Buffer.from(swap.record().preimageHex!, 'hex')
 		);
 		s.chain.mine(1);
 		await swap.tick();
@@ -408,7 +408,7 @@ describe('ReverseSwap lifecycle', function () {
 		s.chain.mine(1);
 		s.payer.settle(
 			swap.record().paymentHashHex,
-			Buffer.from(swap.record().preimageHex, 'hex')
+			Buffer.from(swap.record().preimageHex!, 'hex')
 		);
 		const final = await done;
 		expect(final.state).to.equal('CLAIMED');

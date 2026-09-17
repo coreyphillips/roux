@@ -28,7 +28,7 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { directFunding } from 'beignet/lightning';
-import { ChicoryLog, ChicoryNetwork, noopLog } from '../types';
+import { RouxLog, RouxNetwork, noopLog } from '../types';
 import { IHttpEndpoint, requestJson } from '../link/http';
 import { bitcoinNetwork, coinKindOf } from './key-wallet';
 
@@ -40,7 +40,7 @@ export interface IClnWalletOptions {
 	port?: number;
 	/** A rune allowing getinfo, listfunds, listtransactions, newaddr, reserveinputs, unreserveinputs, signpsbt. */
 	rune: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	https?: boolean;
 	ca?: IHttpEndpoint['ca'];
 	rejectUnauthorized?: boolean;
@@ -52,7 +52,7 @@ export interface IClnWalletOptions {
 	getTransaction?: (txidHex: string) => Promise<Buffer>;
 	/** Blocks a reservation lasts (default 144; CLN's own default is 72). */
 	reserveBlocks?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 interface IClnOutput {
@@ -88,7 +88,7 @@ interface ICoin extends directFunding.IDfSenderCoin {
 export class ClnWallet implements directFunding.IDfSenderWallet {
 	private readonly ep: IHttpEndpoint;
 	private readonly network: bitcoin.Network;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	private readonly coins = new Map<string, ICoin>();
 	private transactions = new Map<string, IClnTransaction>();
 	private tip = 0;

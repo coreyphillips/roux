@@ -1,13 +1,13 @@
 /**
- * The peer link: how chicory reaches a beignet node.
+ * The peer link: how roux reaches a beignet node.
  *
  * beignet's own liquidity engines talk to peers through a five-method seam
  * (`IDfPeerMessaging`: who am I, send a custom message, hear custom messages,
- * am I connected, connect). chicory reuses that seam verbatim, so beignet's
+ * am I connected, connect). roux reuses that seam verbatim, so beignet's
  * direct-funding lanes and payer engine run unchanged on top of ANY of the
  * links below. A link is where the identity lives:
  *
- *  - `NoisePeerLink`  a standalone BOLT 8 connection with a key chicory holds
+ *  - `NoisePeerLink`  a standalone BOLT 8 connection with a key roux holds
  *                     (ephemeral or yours). Right for paying direct-funding
  *                     requests from any wallet, and for JIT when this process
  *                     IS the node that will accept the channel.

@@ -33,7 +33,7 @@
 import crypto from 'crypto';
 import * as bitcoin from 'bitcoinjs-lib';
 import { message, swaps } from 'beignet/lightning';
-import { ChicoryLog } from '../types';
+import { RouxLog } from '../types';
 import { IPeerLink } from '../link/types';
 import { exchange } from '../link/exchange';
 import { ReverseSwapStore } from './store';
@@ -56,7 +56,7 @@ export interface IReverseSwapDeps {
 	chain: ISwapChain;
 	store: ReverseSwapStore;
 	policy: ISwapClientPolicy;
-	log: ChicoryLog;
+	log: RouxLog;
 	/** Told after every persisted state change. */
 	notify?: (change: IReverseSwapChange) => void;
 }

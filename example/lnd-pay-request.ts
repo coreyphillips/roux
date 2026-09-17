@@ -6,7 +6,7 @@
  *   REQUEST='bitcoin:bc1...?bgnq=...' NETWORK=mainnet npm run example:lnd-pay
  *
  * What happens:
- *   1. chicory snapshots LND's confirmed coins, their keys and derivation
+ *   1. roux snapshots LND's confirmed coins, their keys and derivation
  *      paths (ListUnspent, ListAddresses), and leases the one it offers so
  *      LND's own coin selection cannot take it (LeaseOutput).
  *   2. It dials the receiver (or the receiver's LSP relay) with a fresh
@@ -15,7 +15,7 @@
  *      verifies as a Bitcoin signed message (beignet PR #735; a receiver on
  *      an older beignet declines the offer, nothing is spent).
  *   3. The receiver negotiates the channel funding transaction with its LSP
- *      and attests the funding output with its node key. chicory verifies
+ *      and attests the funding output with its node key. roux verifies
  *      the attestation, the change back to LND, and the fee ceiling, then
  *      has LND sign the one input through SignPsbt (P2WPKH and P2TR both).
  *   4. The receiver broadcasts and returns the receipt preimage.
@@ -55,9 +55,9 @@ async function main(): Promise<void> {
 		// Durable payment records: a retry after a crash replays the outcome
 		// rather than offering a second coin.
 		storage: new FileStorage(
-			path.join(os.homedir(), '.chicory', 'lnd-payments.json')
+			path.join(os.homedir(), '.roux', 'lnd-payments.json')
 		),
-		log: consoleLog('chicory')
+		log: consoleLog('roux')
 	});
 	try {
 		const request = process.env.REQUEST ?? '';

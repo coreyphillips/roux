@@ -5,7 +5,7 @@
  * beignet provider's hold invoice for a hash it holds the preimage of, the
  * provider funds a P2WSH contract the client can claim with that preimage,
  * and the claim's witness (mempool or block) is what lets the provider
- * settle the hold. Nothing in chicory settles or holds an invoice; the
+ * settle the hold. Nothing in roux settles or holds an invoice; the
  * provider does that.
  *
  * Two seams a host supplies, because an LND or CLN wallet can pay an
@@ -25,7 +25,7 @@
  * (ISwapFunder) sends the coins.
  */
 
-import { ChicoryNetwork } from '../types';
+import { RouxNetwork } from '../types';
 
 export interface ISwapPaymentStatus {
 	status: 'unknown' | 'pending' | 'succeeded' | 'failed';
@@ -291,7 +291,7 @@ export interface IReverseSwapRecord {
 	version: 1;
 	swapIdHex: string;
 	providerNodeIdHex: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	createdAt: number;
 	createdHeight: number;
 	paymentHashHex: string;
@@ -417,7 +417,7 @@ export interface ISubmarineSwapRecord {
 	version: 1;
 	swapIdHex: string;
 	providerNodeIdHex: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	createdAt: number;
 	createdHeight: number;
 	paymentHashHex: string;

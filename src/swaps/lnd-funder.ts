@@ -6,7 +6,7 @@
  * onchain:read.
  */
 
-import { ChicoryLog, ChicoryNetwork, noopLog } from '../types';
+import { RouxLog, RouxNetwork, noopLog } from '../types';
 import { IHttpEndpoint, requestJson } from '../link/http';
 import { ISwapFunder } from './types';
 
@@ -15,13 +15,13 @@ export interface ILndFunderOptions {
 	/** REST port (default 8080). */
 	port?: number;
 	macaroonHex: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	https?: boolean;
 	ca?: IHttpEndpoint['ca'];
 	rejectUnauthorized?: boolean;
 	/** Confirmations the coins spent need (default 1: never build on unconfirmed change). */
 	minConfs?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 interface ILndTransaction {
@@ -32,7 +32,7 @@ interface ILndTransaction {
 
 export class LndFunder implements ISwapFunder {
 	private readonly ep: IHttpEndpoint;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 
 	constructor(private readonly options: ILndFunderOptions) {
 		this.ep = {

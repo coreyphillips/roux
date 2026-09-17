@@ -1,13 +1,13 @@
 /**
  * A REAL LND node gets JIT inbound liquidity from a REAL beignet LSP,
- * through chicory.
+ * through roux.
  *
  * Needs the beignet interop docker stack (the `lnd` container, REST on
  * 8091, macaroon read with `docker exec`); the whole suite skips cleanly
  * without it. The beignet LSP runs in this process and listens on every
  * interface so the container can dial it at host.docker.internal.
  *
- * What is proven: LND dials the LSP on chicory's request, chicory drives
+ * What is proven: LND dials the LSP on roux's request, roux drives
  * the quote and the intent over LND's own connection (LND's custom-message
  * REST API), the LSP's intent ledger names LND's identity as the wallet it
  * will open to, the grant is in hop mode with the fee in the hint, and
@@ -117,7 +117,7 @@ describe('JIT inbound liquidity for a real LND node (docker)', function () {
 		}
 		// A fresh LSP identity per run, so a stale peer entry in LND cannot
 		// answer for it.
-		const seed = sha(`chicory-lnd-live-${Date.now()}`);
+		const seed = sha(`roux-lnd-live-${Date.now()}`);
 		lsp = new lnNode.LightningNode({
 			nodePrivateKey: sha(seed, 'identity'),
 			channelBasepoints: makeBasepoints(seed),
@@ -156,7 +156,7 @@ describe('JIT inbound liquidity for a real LND node (docker)', function () {
 		try {
 			await client.connect(`${lspPubkey}@${HOST_FROM_DOCKER}:${port}`);
 			expect(client.isConnected(lspPubkey)).to.equal(true);
-			// The LSP sees LND's identity on the connection, not chicory's.
+			// The LSP sees LND's identity on the connection, not roux's.
 			const lndInfo = await lndRequest<{ identity_pubkey: string }>(
 				macaroon!,
 				'GET',
@@ -201,7 +201,7 @@ describe('JIT inbound liquidity for a real LND node (docker)', function () {
 				'/v1/invoices',
 				{
 					value: '200000',
-					memo: 'chicory jit',
+					memo: 'roux jit',
 					route_hints: [{ hop_hints: [grant.lndHopHint()] }],
 					cltv_expiry: String(grant.minFinalCltvExpiry)
 				}

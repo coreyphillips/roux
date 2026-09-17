@@ -33,7 +33,7 @@ import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import crypto from 'crypto';
 import type { directFunding } from 'beignet/lightning';
-import { ChicoryLog, ChicoryNetwork, noopLog } from '../types';
+import { RouxLog, RouxNetwork, noopLog } from '../types';
 import { IHttpEndpoint, requestJson } from '../link/http';
 import { bitcoinNetwork, coinKindOf } from './key-wallet';
 
@@ -49,7 +49,7 @@ export interface ILndWalletOptions {
 	 * (SignMessageWithAddr) and info:read.
 	 */
 	macaroonHex: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	https?: boolean;
 	ca?: IHttpEndpoint['ca'];
 	rejectUnauthorized?: boolean;
@@ -57,13 +57,13 @@ export interface ILndWalletOptions {
 	minConfs?: number;
 	/** How long a lease lasts (default 30 days); the engine releases it earlier. */
 	leaseSeconds?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 /** The lease id this adapter tags its own reservations with. */
 export const LND_WALLET_LEASE_ID = crypto
 	.createHash('sha256')
-	.update('chicory-direct-funding-lease', 'utf8')
+	.update('roux-direct-funding-lease', 'utf8')
 	.digest();
 
 interface ILndUtxo {
@@ -99,7 +99,7 @@ interface ICoin extends directFunding.IDfSenderCoin {
 export class LndWallet implements directFunding.IDfSenderWallet {
 	private readonly ep: IHttpEndpoint;
 	private readonly network: bitcoin.Network;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	/** Every coin seen, leased ones included; keyed by `txid:vout`. */
 	private readonly coins = new Map<string, ICoin>();
 	/** Outpoints leased right now (ours or anyone's). */

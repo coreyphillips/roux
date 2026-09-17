@@ -5,9 +5,9 @@
  *   NETWORK=mainnet AMOUNT_SATS=100000 npm run example:ldk-jit
  *
  * An LDK application holds its own node key and peer connections, so
- * chicory talks to the beignet LSP THROUGH the application: the app implements
+ * roux talks to the beignet LSP THROUGH the application: the app implements
  * the five HTTP routes documented in `example/ldk-bridge/` around its
- * supplied CustomMessageHandler for message type 44069, and chicory's
+ * supplied CustomMessageHandler for message type 44069, and roux's
  * BridgePeerLink drives the protocol over it. The LSP sees the LDK node's
  * identity, so the channel it opens lands on the LDK node.
  *
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
 			token: process.env.BRIDGE_TOKEN,
 			log: consoleLog('ldk-bridge')
 		}),
-		log: consoleLog('chicory')
+		log: consoleLog('roux')
 	});
 	try {
 		const lsp = await client.connect(process.env.BEIGNET_LSP ?? '');

@@ -9,7 +9,7 @@
 
 import * as http from 'http';
 import * as https from 'https';
-import { ChicoryLog, noopLog } from '../types';
+import { RouxLog, noopLog } from '../types';
 import { ISwapChain, ISwapChainOutput } from './types';
 
 export interface IBitcoinCoreChainOptions {
@@ -23,7 +23,7 @@ export interface IBitcoinCoreChainOptions {
 	timeoutMs?: number;
 	/** Blocks scanned back when a spender is looked for (default 50). */
 	spenderScanDepth?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 interface IRpcError {
@@ -43,7 +43,7 @@ export class BitcoinCoreRpcError extends Error {
 }
 
 export class BitcoinCoreChain implements ISwapChain {
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	/**
 	 * Block hashes of transactions met while scanning blocks. Without
 	 * txindex, Core answers about a mined transaction only when told its

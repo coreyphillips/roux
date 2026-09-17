@@ -6,7 +6,7 @@
 
 import * as bitcoin from 'bitcoinjs-lib';
 import { crypto as bcrypto, swaps } from 'beignet/lightning';
-import { ChicoryNetwork, toBeignetNetwork } from '../types';
+import { RouxNetwork, toBeignetNetwork } from '../types';
 import { ISwapChainOutput, ISwapClientPolicy, SwapError } from './types';
 import { invoice as beignetInvoice } from 'beignet/lightning';
 
@@ -23,7 +23,7 @@ export interface IVerifyReverseAckParams {
 	create: swaps.ISwapCreate;
 	ack: swaps.ISwapCreateAck;
 	currentHeight: number;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	policy: ISwapClientPolicy;
 	/** The most this client will pay above the on-chain amount. */
 	maxTotalFeeSat: bigint;
@@ -107,7 +107,7 @@ export interface IVerifySubmarineAckParams {
 	create: swaps.ISwapSubmarineCreate;
 	ack: swaps.ISwapSubmarineCreateAck;
 	currentHeight: number;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	policy: ISwapClientPolicy;
 	/** The most this client will give up below the on-chain amount. */
 	maxTotalFeeSat: bigint;
@@ -315,10 +315,7 @@ export function assertNativeSegwit(script: Buffer): Buffer {
 	return script;
 }
 
-export function toOutputScript(
-	address: string,
-	network: ChicoryNetwork
-): Buffer {
+export function toOutputScript(address: string, network: RouxNetwork): Buffer {
 	const net =
 		network === 'mainnet'
 			? bitcoin.networks.bitcoin

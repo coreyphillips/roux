@@ -1,12 +1,12 @@
 /**
- * chicory against a REAL beignet LSP over TCP.
+ * roux against a REAL beignet LSP over TCP.
  *
  * The LSP is beignet's own LightningNode with JIT receive switched on,
- * listening on a loopback port. chicory dials it with a standalone Noise
+ * listening on a loopback port. roux dials it with a standalone Noise
  * link (an identity the LSP has never seen), and the quote and the intent
  * registration go over the wire exactly as they would from a beignet
  * wallet: the LSP cannot tell the difference, and its intent ledger names
- * chicory's key as the wallet.
+ * roux's key as the wallet.
  */
 
 import { expect } from 'chai';
@@ -40,7 +40,7 @@ async function startLsp(
 	label: string,
 	jit: Partial<JitConfig>
 ): Promise<{ lsp: lnNode.LightningNode; uri: string; pubkey: string }> {
-	const seed = sha(`chicory-jit-${label}`);
+	const seed = sha(`roux-jit-${label}`);
 	const lsp = new lnNode.LightningNode({
 		nodePrivateKey: sha(seed, 'identity'),
 		channelBasepoints: makeBasepoints(seed),
@@ -117,7 +117,7 @@ describe('JIT inbound liquidity against a real beignet LSP over TCP', function (
 	it('registers an intent and hands back the invoice hint the LSP will intercept', async () => {
 		const link = new NoisePeerLink({
 			network: 'regtest',
-			privateKey: sha('chicory-wallet-key')
+			privateKey: sha('roux-wallet-key')
 		});
 		const client = new BeignetClient({ link, network: 'regtest' });
 		try {
@@ -151,7 +151,7 @@ describe('JIT inbound liquidity against a real beignet LSP over TCP', function (
 			});
 			expect(grant.clnShortChannelId()).to.match(/^16777215x\d+x\d+$/);
 
-			// The LSP's ledger names chicory's key as the wallet it will open to.
+			// The LSP's ledger names roux's key as the wallet it will open to.
 			const intents = feeLsp.lsp.getJitReceiveManager()!.listIntents();
 			const ours = intents.find(
 				(i) => i.interceptScidHex === grant.interceptScidHex

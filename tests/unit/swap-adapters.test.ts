@@ -614,7 +614,7 @@ describe('ElectrumChain', function () {
 
 describe('ReverseSwapStore', function () {
 	it('round-trips through FileStorage and survives a corrupt document', function () {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chicory-swaps-'));
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'roux-swaps-'));
 		const file = path.join(dir, 'swaps.json');
 		const store = new ReverseSwapStore(new FileStorage(file));
 		const record: IReverseSwapRecord = {

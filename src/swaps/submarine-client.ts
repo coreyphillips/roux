@@ -16,8 +16,8 @@
 import crypto from 'crypto';
 import { crypto as bcrypto, message, swaps } from 'beignet/lightning';
 import {
-	ChicoryLog,
-	ChicoryNetwork,
+	RouxLog,
+	RouxNetwork,
 	Sats,
 	assertPubkeyHex,
 	toBeignetNetwork,
@@ -81,7 +81,7 @@ export class SubmarineSwapClient {
 	constructor(
 		private readonly options: ISwapClientOptions,
 		private readonly policy: ISwapClientPolicy,
-		private readonly log: ChicoryLog
+		private readonly log: RouxLog
 	) {
 		this.store = new SubmarineSwapStore(options.storage ?? new MemoryStorage());
 	}
@@ -504,4 +504,4 @@ export class SubmarineSwapClient {
 	}
 }
 
-export type { ChicoryNetwork };
+export type { RouxNetwork };

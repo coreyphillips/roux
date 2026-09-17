@@ -19,7 +19,7 @@
  */
 
 import { message } from 'beignet/lightning';
-import { ChicoryLog, noopLog } from '../types';
+import { RouxLog, noopLog } from '../types';
 import { ICustomMessage, IPeerLink, deliverIsolated } from './types';
 import { IHttpEndpoint, requestJson } from './http';
 import { clnSocketIoNotifications } from './cln-socketio';
@@ -56,12 +56,12 @@ export interface IClnPeerLinkOptions {
 	resubscribeDelayMs?: number;
 	/** How long open() waits for the notification stream to attach (default 5 s). */
 	notificationReadyMs?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 export class ClnPeerLink implements IPeerLink {
 	private readonly ep: IHttpEndpoint;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	private readonly listeners = new Set<(msg: ICustomMessage) => void>();
 	private readonly connected = new Set<string>();
 	private nodeId: string | null = null;

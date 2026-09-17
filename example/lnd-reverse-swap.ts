@@ -8,19 +8,19 @@
  *   NETWORK=mainnet npm run example:lnd-reverse-swap
  *
  * What happens:
- *   1. chicory asks the provider for a quote, then opens the swap: it holds
+ *   1. roux asks the provider for a quote, then opens the swap: it holds
  *      a fresh preimage and claim key, the provider answers with a hold
  *      invoice for sha256(preimage), its refund key and height, and the
- *      contract address. chicory rebuilds the contract itself and refuses
+ *      contract address. roux rebuilds the contract itself and refuses
  *      any ack whose script, invoice or amounts disagree.
  *   2. The record (terms, preimage, claim key, LND's claim address) is
  *      written to FileStorage BEFORE LND is asked to pay. Treat that file
  *      as a wallet file.
  *   3. LND pays the hold invoice; the provider funds the contract on chain.
  *   4. After one confirmation (never earlier: the claim reveals the
- *      preimage) chicory claims the contract to LND's address through
+ *      preimage) roux claims the contract to LND's address through
  *      Bitcoin Core. The provider settles the hold from the mempool claim,
- *      and LND's payment completes with the preimage chicory chose.
+ *      and LND's payment completes with the preimage roux chose.
  *
  * RESUME=1 re-checks every unresolved swap in the file instead of opening a
  * new one (after a crash, or to keep claiming a swap that is still funding).
@@ -73,7 +73,7 @@ async function main(): Promise<void> {
 	const client = new BeignetClient({
 		link,
 		network,
-		storage: new FileStorage(path.join(os.homedir(), '.chicory', 'swaps.json')),
+		storage: new FileStorage(path.join(os.homedir(), '.roux', 'swaps.json')),
 		swaps: { payer, chain },
 		log
 	});

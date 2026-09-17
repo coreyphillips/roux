@@ -8,10 +8,10 @@
  *   NETWORK=mainnet npm run example:lnd-submarine-swap
  *
  * What happens:
- *   1. chicory asks the provider for a quote, has LND mint an invoice for
+ *   1. roux asks the provider for a quote, has LND mint an invoice for
  *      the amount minus the fee, and opens the swap: the provider answers
  *      with its claim key, the refund height and the contract address.
- *      chicory rebuilds the contract from LND's refund key and the
+ *      roux rebuilds the contract from LND's refund key and the
  *      provider's claim key and refuses any ack whose script, amounts or
  *      window disagree, or whose window cannot hold the invoice's final
  *      CLTV.
@@ -22,7 +22,7 @@
  *      the funding attempt is persisted before LND is asked.
  *   4. Once the funding has the provider's confirmations, the provider
  *      pays LND's invoice and claims the contract with the preimage.
- *      chicory ends SETTLED. Unpaid past the refund height, chicory refunds
+ *      roux ends SETTLED. Unpaid past the refund height, roux refunds
  *      LND, never while LND still holds the provider's HTLC.
  *
  * RESUME=1 re-checks every unresolved swap in the file instead of opening a
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
 	const client = new BeignetClient({
 		link,
 		network,
-		storage: new FileStorage(path.join(os.homedir(), '.chicory', 'swaps.json')),
+		storage: new FileStorage(path.join(os.homedir(), '.roux', 'swaps.json')),
 		swaps: { payer, funder, chain },
 		log
 	});

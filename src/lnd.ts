@@ -1,5 +1,5 @@
 /**
- * `chicory/lnd`: everything an LND integration needs, and one call that
+ * `roux/lnd`: everything an LND integration needs, and one call that
  * wires it up. LND speaks over its REST API with a macaroon; the same
  * credentials serve the peer link (custom messages), the wallet (coins,
  * PSBT signing, message signing), the payer (invoices, payments,
@@ -12,7 +12,7 @@ import { LndWallet } from './direct-funding/lnd-wallet';
 import { LndPayer } from './swaps/lnd-payer';
 import { LndFunder } from './swaps/lnd-funder';
 import { IHttpEndpoint } from './link/http';
-import { ChicoryLog, ChicoryNetwork } from './types';
+import { RouxLog, RouxNetwork } from './types';
 
 export { LndPeerLink } from './link/lnd-link';
 export type { ILndPeerLinkOptions } from './link/lnd-link';
@@ -33,7 +33,7 @@ export interface ILndClientOptions
 	port?: number;
 	/** Hex macaroon; see LndWallet for the permissions the wallet needs. */
 	macaroonHex: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	https?: boolean;
 	ca?: IHttpEndpoint['ca'];
 	rejectUnauthorized?: boolean;
@@ -50,7 +50,7 @@ export interface ILndClientOptions
  * Nothing is contacted until `connect()`.
  */
 export function createLndClient(options: ILndClientOptions): BeignetClient {
-	const log: ChicoryLog | undefined = options.log;
+	const log: RouxLog | undefined = options.log;
 	const rest = {
 		host: options.host,
 		port: options.port,

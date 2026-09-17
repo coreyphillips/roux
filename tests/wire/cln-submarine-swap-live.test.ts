@@ -1,12 +1,12 @@
 /**
  * A real CLN moves an on-chain coin into its own Lightning balance through
- * a beignet submarine provider, driven entirely by chicory: ClnPeerLink
+ * a beignet submarine provider, driven entirely by roux: ClnPeerLink
  * carries the swap protocol over clnrest, ClnPayer mints and looks up the
  * invoice, ClnFunder pays the contract with `withdraw`, BitcoinCoreChain
  * watches the contract, and the provider (a beignet node from source that
  * opened a channel TO CLN) pays the invoice and claims with the preimage.
  * The second case deletes CLN's unpaid invoice: the provider's HTLC fails
- * on arrival, the swap fails, and chicory refunds after the height with the
+ * on arrival, the swap fails, and roux refunds after the height with the
  * operator's override, since CLN no longer knows the invoice.
  *
  * Opt-in: REQUIRE_SWAP_LIVE=1 with the docker stack up (bitcoind 43782,
@@ -47,7 +47,7 @@ import {
 
 const CLN_REST_PORT = Number(process.env.CLN_REST_PORT ?? 3010);
 
-describe('CLN submarine swap through chicory (docker)', function () {
+describe('CLN submarine swap through roux (docker)', function () {
 	this.timeout(900_000);
 	let provider: ILiveProvider | null = null;
 	let rune = '';
@@ -72,7 +72,7 @@ describe('CLN submarine swap through chicory (docker)', function () {
 		await fundClnWallet(cln);
 		const clnPubkey = (await cln.getInfo()).id;
 
-		provider = await startProvider('chicory-submarine-provider-cln', {
+		provider = await startProvider('roux-submarine-provider-cln', {
 			submarine: true
 		});
 		await openProviderChannelTo(
@@ -161,7 +161,7 @@ describe('CLN submarine swap through chicory (docker)', function () {
 			120_000
 		);
 		swap.poke();
-		await until('chicory settled', async () => swap.state === 'SETTLED');
+		await until('roux settled', async () => swap.state === 'SETTLED');
 		const invoice = await payer.lookupInvoice(
 			Buffer.from(record.paymentHashHex, 'hex')
 		);
@@ -183,7 +183,7 @@ describe('CLN submarine swap through chicory (docker)', function () {
 		await client.close();
 	});
 
-	it('CLN deletes the unpaid invoice: the provider fails, chicory refunds after the height with the override', async function () {
+	it('CLN deletes the unpaid invoice: the provider fails, roux refunds after the height with the override', async function () {
 		const p = provider!;
 		const { client, payer } = clientFor();
 		await client.connect(`${p.node.getNodeId()}@${HOST_FROM_DOCKER}:${p.port}`);

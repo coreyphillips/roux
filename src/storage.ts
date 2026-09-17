@@ -1,5 +1,5 @@
 /**
- * Where chicory keeps durable state.
+ * Where roux keeps durable state.
  *
  * Two kinds of durable state live here. The direct-funding PAYMENT record
  * (which coin was offered to which request, the offer bytes, the witness
@@ -8,9 +8,9 @@
  * records do say what this device paid and to whom. The reverse SWAP record
  * (swaps/store.ts) is different: it holds the claim private key and the
  * preimage, because a claim after a crash needs exactly those. A host that
- * runs swaps must treat the storage it hands chicory as a wallet file:
+ * runs swaps must treat the storage it hands roux as a wallet file:
  * encrypt it at rest, restrict its mode, back it up. beignet keeps its own
- * records in its encrypted wallet store; chicory has no wallet of its own,
+ * records in its encrypted wallet store; roux has no wallet of its own,
  * so the host chooses.
  */
 

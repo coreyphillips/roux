@@ -6,7 +6,7 @@
  *   ESPLORA=http://127.0.0.1:3002 TIP=<current height> \
  *   NETWORK=regtest npm run example:ldk-pay
  *
- * Paying needs no Lightning identity at all: chicory dials the receiver (or
+ * Paying needs no Lightning identity at all: roux dials the receiver (or
  * its LSP relay) with a fresh ephemeral key and the payer engine runs in
  * this process. What it needs from the application is the coin and the
  * ability to sign it, which BDK has. The simplest hand-over, used here, is
@@ -102,10 +102,8 @@ async function main(): Promise<void> {
 		wallet,
 		// Durable payment records: a retry after a crash replays the outcome
 		// instead of offering a second coin.
-		storage: new FileStorage(
-			path.join(os.homedir(), '.chicory', 'payments.json')
-		),
-		log: consoleLog('chicory')
+		storage: new FileStorage(path.join(os.homedir(), '.roux', 'payments.json')),
+		log: consoleLog('roux')
 	});
 	try {
 		const request = process.env.REQUEST ?? '';

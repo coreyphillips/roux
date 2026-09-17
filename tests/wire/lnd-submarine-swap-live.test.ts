@@ -1,15 +1,15 @@
 /**
  * A real LND moves an on-chain coin into its own Lightning balance through
- * a beignet submarine provider, driven entirely by chicory: LndPeerLink
+ * a beignet submarine provider, driven entirely by roux: LndPeerLink
  * carries the swap protocol over LND's own connection, LndPayer mints and
  * looks up the invoice, LndFunder pays the contract from LND's wallet,
  * BitcoinCoreChain watches the contract, and the provider (a beignet node
  * from source that opened a channel TO LND, since it pays) pays the invoice
  * under its ceiling and claims with the preimage. Asserted on both sides:
- * chicory ends SETTLED with LND's invoice SETTLED, the provider ends
+ * roux ends SETTLED with LND's invoice SETTLED, the provider ends
  * CLAIM_CONFIRMED. The second case supplies an LND hold invoice: the
- * provider pays, LND parks the HTLC, chicory refuses to refund while it is
- * parked, LND cancels, the provider fails the swap, chicory refunds after
+ * provider pays, LND parks the HTLC, roux refuses to refund while it is
+ * parked, LND cancels, the provider fails the swap, roux refunds after
  * the height.
  *
  * Opt-in: REQUIRE_SWAP_LIVE=1 with the docker stack up (bitcoind 43782,
@@ -48,7 +48,7 @@ import {
 	waitForLndSync
 } from '../swap-live-harness';
 
-describe('LND submarine swap through chicory (docker)', function () {
+describe('LND submarine swap through roux (docker)', function () {
 	this.timeout(900_000);
 	let provider: ILiveProvider | null = null;
 	let macaroonHex = '';
@@ -70,7 +70,7 @@ describe('LND submarine swap through chicory (docker)', function () {
 		const lndPubkey = (await lnd.getInfo()).identity_pubkey;
 
 		provider = await startProvider(
-			`chicory-submarine-provider-lnd-${Date.now()}`,
+			`roux-submarine-provider-lnd-${Date.now()}`,
 			{ submarine: true }
 		);
 		await openProviderChannelTo(
@@ -171,7 +171,7 @@ describe('LND submarine swap through chicory (docker)', function () {
 			120_000
 		);
 		swap.poke();
-		await until('chicory settled', async () => swap.state === 'SETTLED');
+		await until('roux settled', async () => swap.state === 'SETTLED');
 		expect(swap.record().settledBy).to.equal('invoice');
 		const invoice = await payer.lookupInvoice(
 			Buffer.from(record.paymentHashHex, 'hex')
@@ -200,7 +200,7 @@ describe('LND submarine swap through chicory (docker)', function () {
 		await client.close();
 	});
 
-	it('an LND hold invoice: the refund waits while the HTLC is parked, LND cancels, the provider fails, chicory refunds after the height', async function () {
+	it('an LND hold invoice: the refund waits while the HTLC is parked, LND cancels, the provider fails, roux refunds after the height', async function () {
 		const p = provider!;
 		const { client, payer } = clientFor();
 		await client.connect(`${p.node.getNodeId()}@${HOST_FROM_DOCKER}:${p.port}`);
@@ -211,7 +211,7 @@ describe('LND submarine swap through chicory (docker)', function () {
 		});
 		expect(quote.accepted, quote.reason).to.equal(true);
 		// The invoice the client will supply: a hold invoice for exactly the
-		// amount chicory computes (quoted fee plus its 100 sat slack).
+		// amount roux computes (quoted fee plus its 100 sat slack).
 		const invoiceSat = amountSat - quote.totalFeeSat - 100n;
 		const preimage = crypto.randomBytes(32);
 		const hashHex = crypto.createHash('sha256').update(preimage).digest('hex');
@@ -250,7 +250,7 @@ describe('LND submarine swap through chicory (docker)', function () {
 				(await payer.lookupInvoice(Buffer.from(hashHex, 'hex'))).state ===
 				'accepted'
 		);
-		// With the HTLC parked, chicory sees the invoice accepted. A refund
+		// With the HTLC parked, roux sees the invoice accepted. A refund
 		// is not due yet (the height), and past the provider's ceiling LND
 		// itself fails the HTLC back before the refund height arrives, so a
 		// parked HTLC at the refund height cannot occur by construction; the
@@ -264,7 +264,7 @@ describe('LND submarine swap through chicory (docker)', function () {
 		);
 		expect(swap.record().refund).to.equal(undefined);
 		// LND cancels: the HTLC fails back, the provider fails the swap,
-		// chicory refunds.
+		// roux refunds.
 		await lnd!.cancelHoldInvoice(hashHex);
 		await until(
 			'provider failed the payment',

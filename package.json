@@ -1,5 +1,5 @@
 {
-	"name": "chicory",
+	"name": "roux",
 	"version": "0.1.0",
 	"description": "Client for beignet JIT inbound liquidity, direct-funding payments and swaps in both directions from supported wallets and Lightning applications.",
 	"main": "dist/index.js",
@@ -29,11 +29,11 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/coreyphillips/chicory.git"
+		"url": "git+https://github.com/coreyphillips/roux.git"
 	},
-	"homepage": "https://github.com/coreyphillips/chicory#readme",
+	"homepage": "https://github.com/coreyphillips/roux#readme",
 	"bugs": {
-		"url": "https://github.com/coreyphillips/chicory/issues"
+		"url": "https://github.com/coreyphillips/roux/issues"
 	},
 	"files": [
 		"dist/",

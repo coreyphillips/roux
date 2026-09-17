@@ -1,9 +1,9 @@
 /**
- * Shared shapes for chicory.
+ * Shared shapes for roux.
  *
- * chicory is a client for the beignet peer protocol: everything a beignet
+ * roux is a client for the beignet peer protocol: everything a beignet
  * node says to another beignet node about liquidity rides ONE odd BOLT 1
- * message type (44069) that every other implementation ignores. chicory puts
+ * message type (44069) that every other implementation ignores. roux puts
  * that same type on the wire from a wallet or node that is not beignet, so a
  * beignet node cannot tell the difference and serves it exactly as it would
  * serve a beignet peer.
@@ -12,10 +12,10 @@
 import { invoice } from 'beignet/lightning';
 
 /** The networks beignet speaks, by their everyday names. */
-export type ChicoryNetwork = 'mainnet' | 'testnet' | 'regtest' | 'signet';
+export type RouxNetwork = 'mainnet' | 'testnet' | 'regtest' | 'signet';
 
 /** Map an everyday network name onto beignet's bech32-prefix enum. */
-export function toBeignetNetwork(network: ChicoryNetwork): invoice.Network {
+export function toBeignetNetwork(network: RouxNetwork): invoice.Network {
 	switch (network) {
 		case 'mainnet':
 			return invoice.Network.MAINNET;
@@ -31,19 +31,16 @@ export function toBeignetNetwork(network: ChicoryNetwork): invoice.Network {
 }
 
 /**
- * Structured log sink. Every lane, engine and link in chicory reports
+ * Structured log sink. Every lane, engine and link in roux reports
  * through one of these rather than to the console, so a host decides where
  * diagnostics go. The default is silence.
  */
-export type ChicoryLog = (
-	action: string,
-	data: Record<string, unknown>
-) => void;
+export type RouxLog = (action: string, data: Record<string, unknown>) => void;
 
-export const noopLog: ChicoryLog = () => undefined;
+export const noopLog: RouxLog = () => undefined;
 
 /** A console logger, for examples and debugging. */
-export function consoleLog(prefix = 'chicory'): ChicoryLog {
+export function consoleLog(prefix = 'roux'): RouxLog {
 	return (action, data): void => {
 		console.error(`[${prefix}] ${action}`, JSON.stringify(data, bigintSafe));
 	};

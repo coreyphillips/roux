@@ -40,7 +40,7 @@
 
 import crypto from 'crypto';
 import { gossip, liquidity, message } from 'beignet/lightning';
-import { ChicoryLog, Sats, assertPubkeyHex, noopLog, toSats } from '../types';
+import { RouxLog, Sats, assertPubkeyHex, noopLog, toSats } from '../types';
 import { IPeerLink } from '../link/types';
 import { exchange } from '../link/exchange';
 
@@ -68,7 +68,7 @@ export interface IJitClientOptions {
 	maxFlatFeeSat?: Sats;
 	/** Ceiling on a proportional opening fee (default 50 000 ppm, i.e. 5%). */
 	maxFeePpm?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 export interface IJitQuoteParams {
@@ -188,7 +188,7 @@ export class JitClient {
 	private readonly link: IPeerLink;
 	private readonly maxFlatFeeSat: bigint;
 	private readonly maxFeePpm: number;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 
 	constructor(options: IJitClientOptions) {
 		this.link = options.link;

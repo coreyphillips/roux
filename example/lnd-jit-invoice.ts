@@ -6,14 +6,14 @@
  *     npm run example:lnd-jit
  *
  * What happens:
- *   1. chicory asks LND (over its REST API) to connect to the beignet LSP,
+ *   1. roux asks LND (over its REST API) to connect to the beignet LSP,
  *      so the LSP sees LND's own identity on the wire.
- *   2. chicory prices the receive (quote) and registers the intent
+ *   2. roux prices the receive (quote) and registers the intent
  *      (authorize) through LND's custom-message API. LND cannot settle an
  *      HTLC short of the onion amount, so the intent asks for hop mode: the
  *      LSP's opening fee comes back inside the route hint, as a routing fee
  *      the SENDER pays.
- *   3. chicory calls LND's AddInvoice with that hint and the final CLTV the
+ *   3. roux calls LND's AddInvoice with that hint and the final CLTV the
  *      LSP needs, and prints the BOLT 11 invoice.
  *   4. When someone pays it, the LSP holds the HTLC, opens a zero-conf
  *      channel to this LND node, and forwards the full amount through it.
@@ -103,7 +103,7 @@ async function main(): Promise<void> {
 			rejectUnauthorized: false,
 			log: consoleLog('lnd-link')
 		}),
-		log: consoleLog('chicory')
+		log: consoleLog('roux')
 	});
 	try {
 		// 1. LND dials the LSP.

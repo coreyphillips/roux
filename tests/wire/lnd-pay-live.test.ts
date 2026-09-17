@@ -1,5 +1,5 @@
 /**
- * A REAL LND node pays a beignet direct-funding request, through chicory,
+ * A REAL LND node pays a beignet direct-funding request, through roux,
  * with one of its own coins and without any key leaving it.
  *
  * Needs the beignet interop docker stack (the `lnd` container, REST on

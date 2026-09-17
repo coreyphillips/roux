@@ -1,6 +1,6 @@
 /**
  * A REAL Core Lightning node pays a beignet direct-funding request, through
- * chicory, with one of its own coins and no key leaving it.
+ * roux, with one of its own coins and no key leaving it.
  *
  * Needs the beignet interop docker stack (the `cln` container, clnrest on
  * 3010, a rune minted with `docker exec`); skips otherwise. The receiver is

@@ -61,7 +61,7 @@ async function main(): Promise<void> {
 	const client = new BeignetClient({
 		link,
 		network,
-		storage: new FileStorage(path.join(os.homedir(), '.chicory', 'swaps.json')),
+		storage: new FileStorage(path.join(os.homedir(), '.roux', 'swaps.json')),
 		swaps: { payer, funder, chain },
 		log
 	});

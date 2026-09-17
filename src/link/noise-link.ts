@@ -1,5 +1,5 @@
 /**
- * A standalone BOLT 8 link: chicory dials the beignet node itself.
+ * A standalone BOLT 8 link: roux dials the beignet node itself.
  *
  * Built on beignet's own `Peer` (Noise_XK handshake, BOLT 1 init, ping/pong,
  * message framing), so the bytes on the wire are the ones a beignet node
@@ -22,16 +22,11 @@ import {
 	message,
 	transport
 } from 'beignet/lightning';
-import {
-	ChicoryLog,
-	ChicoryNetwork,
-	noopLog,
-	toBeignetNetwork
-} from '../types';
+import { RouxLog, RouxNetwork, noopLog, toBeignetNetwork } from '../types';
 import { ICustomMessage, IPeerLink, deliverIsolated } from './types';
 
 export interface INoisePeerLinkOptions {
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	/** 32-byte secp256k1 private key. Omitted: a random ephemeral identity. */
 	privateKey?: Buffer;
 	/**
@@ -47,7 +42,7 @@ export interface INoisePeerLinkOptions {
 	connectTimeoutMs?: number;
 	/** Noise handshake plus init exchange timeout (default 30 s). */
 	handshakeTimeoutMs?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 export class NoisePeerLink implements IPeerLink {
@@ -58,7 +53,7 @@ export class NoisePeerLink implements IPeerLink {
 	/** Dials in flight, so two concurrent connects share one handshake. */
 	private readonly dialing = new Map<string, Promise<void>>();
 	private readonly listeners = new Set<(msg: ICustomMessage) => void>();
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	private closed = false;
 
 	constructor(private readonly options: INoisePeerLinkOptions) {
@@ -104,7 +99,7 @@ export class NoisePeerLink implements IPeerLink {
 			remotePublicKey: Buffer.from(hex, 'hex'),
 			host,
 			port,
-			// No channel features: chicory opens no channels. An empty init is
+			// No channel features: roux opens no channels. An empty init is
 			// what BOLT 1 says a peer that speaks only optional things sends.
 			localFeatures: features.FeatureFlags.empty(),
 			networks: [this.chainHash],

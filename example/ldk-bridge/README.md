@@ -1,6 +1,6 @@
-# chicory LDK bridge (reference)
+# roux LDK bridge (reference)
 
-The Rust half of running chicory against a [rust-lightning](https://github.com/lightningdevkit/rust-lightning) node. chicory (TypeScript) needs to put one custom message type, 44069, on the node's own peer connections and hear it back; rust-lightning routes unknown types to a `CustomMessageHandler`. `src/lib.rs` is that handler, about 150 lines, with unit tests (`cargo test`).
+The Rust half of running roux against a [rust-lightning](https://github.com/lightningdevkit/rust-lightning) node. roux (TypeScript) needs to put one custom message type, 44069, on the node's own peer connections and hear it back; rust-lightning routes unknown types to a `CustomMessageHandler`. `src/lib.rs` is that handler, about 150 lines, with unit tests (`cargo test`).
 
 This directory is a library reference. It does not include an HTTP server,
 a runnable LDK node, invoice creation, channel acceptance or a wallet signing
@@ -10,7 +10,7 @@ bridge. The embedding application implements those pieces. Start with the
 ## Wire it into your node
 
 ```rust
-let bridge = chicory_ldk_bridge::BeignetBridge::new();
+let bridge = roux_ldk_bridge::BeignetBridge::new();
 let peer_manager = PeerManager::new(
     MessageHandler {
         chan_handler: channel_manager.clone(),
@@ -47,4 +47,4 @@ const grant = await client.jit.authorize(lspPubkey, { maxAmountSat: 100_000 });
 
 `example/ldk-jit-invoice.ts` prints what the Rust side needs for `RouteHintHop` and the `lightning-invoice` builder. The channel the LSP opens is zero-conf: accept it with `manually_accept_inbound_channels` and `accept_inbound_channel_from_trusted_peer_0conf` for the LSP's pubkey.
 
-This reference targets applications built directly on rust-lightning. Chicory does not provide a ready-made adapter for an existing `ldk-node` instance.
+This reference targets applications built directly on rust-lightning. Roux does not provide a ready-made adapter for an existing `ldk-node` instance.

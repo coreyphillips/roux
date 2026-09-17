@@ -18,8 +18,8 @@
 import crypto from 'crypto';
 import { crypto as bcrypto, message, swaps } from 'beignet/lightning';
 import {
-	ChicoryLog,
-	ChicoryNetwork,
+	RouxLog,
+	RouxNetwork,
 	Sats,
 	assertPubkeyHex,
 	noopLog,
@@ -54,7 +54,7 @@ import {
 
 export interface ISwapClientOptions {
 	link: IPeerLink;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	payer?: ISwapLightningPayer;
 	/** Sends a submarine swap's coins; omit to fund by hand (attachFunding). */
 	funder?: ISwapFunder;
@@ -68,7 +68,7 @@ export interface ISwapClientOptions {
 	policy?: Partial<ISwapClientPolicy>;
 	/** Where claims go when a swap names no destination; falls back to the payer's wallet. */
 	destination?: () => Promise<Buffer>;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 export interface ISwapQuoteParams {
@@ -122,7 +122,7 @@ export interface IResumeReport {
 export class SwapClient {
 	readonly reverse: ReverseSwapClient;
 	readonly submarine: SubmarineSwapClient;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	private readonly policy: ISwapClientPolicy;
 
 	constructor(private readonly options: ISwapClientOptions) {
@@ -219,7 +219,7 @@ export class ReverseSwapClient {
 	constructor(
 		private readonly options: ISwapClientOptions,
 		private readonly policy: ISwapClientPolicy,
-		private readonly log: ChicoryLog
+		private readonly log: RouxLog
 	) {
 		this.store = new ReverseSwapStore(options.storage ?? new MemoryStorage());
 	}

@@ -49,7 +49,7 @@ async function main(): Promise<void> {
 	const client = new BeignetClient({
 		link: new ClnPeerLink(cln),
 		network,
-		storage: new FileStorage(path.join(os.homedir(), '.chicory', 'swaps.json')),
+		storage: new FileStorage(path.join(os.homedir(), '.roux', 'swaps.json')),
 		swaps: {
 			payer: new ClnPayer({ ...cln, network }),
 			chain: new BitcoinCoreChain({

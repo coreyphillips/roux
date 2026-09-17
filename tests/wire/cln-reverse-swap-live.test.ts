@@ -40,7 +40,7 @@ import {
 
 const CLN_REST_PORT = Number(process.env.CLN_REST_PORT ?? 3010);
 
-describe('CLN reverse swap through chicory (docker)', function () {
+describe('CLN reverse swap through roux (docker)', function () {
 	this.timeout(600_000);
 	let provider: ILiveProvider | null = null;
 	let link: ClnPeerLink | null = null;
@@ -62,7 +62,7 @@ describe('CLN reverse swap through chicory (docker)', function () {
 		await waitForClnSync(cln);
 		const clnPubkey = (await cln.getInfo()).id;
 
-		provider = await startProvider('chicory-swap-provider-cln');
+		provider = await startProvider('roux-swap-provider-cln');
 		await fundClnWallet(cln);
 		await provider.node.connectPeer(clnPubkey, CLN_P2P_HOST, CLN_P2P_PORT);
 		await sleep(2_000);
@@ -139,7 +139,7 @@ describe('CLN reverse swap through chicory (docker)', function () {
 		});
 		await mineAndTick(p, 1);
 		await until(
-			'chicory sees the funding confirmed',
+			'roux sees the funding confirmed',
 			async () => swap.record().funding !== undefined && swap.state !== 'PAYING'
 		);
 		swap.poke();

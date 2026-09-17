@@ -1,7 +1,7 @@
 /**
  * ISwapChain over any beignet IChainBackend (an ElectrumBackend a host
  * built with its own Electrum client, or a backend of its own). This
- * adapter never constructs an Electrum client, so chicory pulls in no
+ * adapter never constructs an Electrum client, so roux pulls in no
  * Electrum dependency; it only speaks the backend's script-hash shape.
  */
 

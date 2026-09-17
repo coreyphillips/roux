@@ -1,5 +1,5 @@
 /**
- * chicory's submarine swap client against beignet's REAL provider engine
+ * roux's submarine swap client against beignet's REAL provider engine
  * over a real Noise connection on loopback TCP: the client side runs on the
  * published `beignet/lightning` build, the provider side on beignet's
  * source tree with its test fakes for the chain and the funding wallet. The
@@ -400,7 +400,7 @@ async function teardown(s: IWireScene): Promise<void> {
 	s.peer.pm.destroy();
 }
 
-describe("submarine swap: chicory against beignet's real provider engine over Noise TCP", function () {
+describe("submarine swap: roux against beignet's real provider engine over Noise TCP", function () {
 	this.timeout(60_000);
 
 	it('quotes, creates, funds, the engine pays under the ceiling and claims, the client settles', async function () {

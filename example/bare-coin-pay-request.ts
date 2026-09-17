@@ -71,10 +71,8 @@ async function main(): Promise<void> {
 		link: new NoisePeerLink({ network, log: consoleLog('noise-link') }),
 		network,
 		wallet,
-		storage: new FileStorage(
-			path.join(os.homedir(), '.chicory', 'payments.json')
-		),
-		log: consoleLog('chicory')
+		storage: new FileStorage(path.join(os.homedir(), '.roux', 'payments.json')),
+		log: consoleLog('roux')
 	});
 	try {
 		const request = process.env.REQUEST ?? '';

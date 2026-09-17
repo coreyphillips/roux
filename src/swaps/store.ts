@@ -7,9 +7,9 @@
  * a reverse record holds the claim private key and the preimage, a
  * submarine record the refund private key, because a claim or refund after
  * a crash needs exactly those. A host must treat the storage it hands
- * chicory as it would a wallet file (encrypt at rest, restrict its mode). A
+ * roux as it would a wallet file (encrypt at rest, restrict its mode). A
  * key-deriving hook, so nothing secret is written, is a documented
- * follow-up (chicory issue #1) for both directions.
+ * follow-up (roux issue #1) for both directions.
  */
 
 import { IWalletDataStorage } from '../storage';

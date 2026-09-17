@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 /// <reference path="../../node_modules/beignet/types/untyped-modules/index.d.ts" />
 /**
- * CLN wallet -> chicory -> real beignet receiver -> real beignet liquidity peer.
+ * CLN wallet -> roux -> real beignet receiver -> real beignet liquidity peer.
  * The complete channel funding is broadcast and confirmed on Bitcoin Core
  * regtest. No channel negotiation, witness delivery or balance is stubbed.
  *
@@ -296,7 +296,7 @@ describe('CLN pays into a real beignet channel and receives chain confirmation (
 				return;
 			}
 			const directory = fs.mkdtempSync(
-				path.join(os.tmpdir(), `chicory-cln-funding-${kind}-`)
+				path.join(os.tmpdir(), `roux-cln-funding-${kind}-`)
 			);
 			const receiverSeed = `receiver-${directory}`;
 			const liquiditySeed = `liquidity-${directory}`;
@@ -456,7 +456,7 @@ describe('CLN pays into a real beignet channel and receives chain confirmation (
 					await bitcoinRpc('gettxout', [chosen.txidHex, chosen.vout, true])
 				).to.equal(null);
 				const miningAddress = await bitcoinRpc<string>('getnewaddress', [
-					'chicory-live-confirmation',
+					'roux-live-confirmation',
 					'bech32'
 				]);
 				await bitcoinRpc('generatetoaddress', [6, miningAddress]);

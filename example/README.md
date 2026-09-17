@@ -1,6 +1,6 @@
 # Running the examples
 
-Chicory supports JIT inbound liquidity, paying beignet direct-funding requests, and reverse swaps from Lightning to on-chain bitcoin. The reverse provider is merged into beignet master. Submarine swaps from on-chain funds to a Lightning invoice still need provider and client implementations, tracked in [beignet #737](https://github.com/coreyphillips/beignet/issues/737).
+Roux supports JIT inbound liquidity, paying beignet direct-funding requests, and reverse swaps from Lightning to on-chain bitcoin. The reverse provider is merged into beignet master. Submarine swaps from on-chain funds to a Lightning invoice still need provider and client implementations, tracked in [beignet #737](https://github.com/coreyphillips/beignet/issues/737).
 
 | Instance                     | JIT receive                                                                          | Pay a direct-funding request                              | Reverse swap                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -11,13 +11,13 @@ Chicory supports JIT inbound liquidity, paying beignet direct-funding requests, 
 
 ## Local setup
 
-Use Node 18 or later. Build the local beignet master checkout containing merged PRs #734 to #736 and #738 to #740 (included in the local 0.15.0 checkout), then install and build chicory:
+Use Node 18 or later. Build the local beignet master checkout containing merged PRs #734 to #736 and #738 to #740 (included in the local 0.15.0 checkout), then install and build roux:
 
 ```bash
 cd /path/to/beignet
 npm install
 npm run build
-cd /path/to/chicory
+cd /path/to/roux
 npm install
 npm run build
 ```
@@ -50,7 +50,7 @@ The output contains the invoice and payment hash. Pay that invoice from another 
 
 ## LND: Lightning to on-chain (reverse swap)
 
-[lnd-reverse-swap.ts](lnd-reverse-swap.ts) moves Lightning balance to LND's own on-chain wallet through a beignet provider. chicory verifies the provider's terms, writes the swap record (claim key and preimage included) to `~/.chicory/swaps.json` before LND pays, waits for one confirmation of the provider's funding, claims the contract to an LND address through Bitcoin Core, and prints the final swap state and confirmed claim transaction ID.
+[lnd-reverse-swap.ts](lnd-reverse-swap.ts) moves Lightning balance to LND's own on-chain wallet through a beignet provider. roux verifies the provider's terms, writes the swap record (claim key and preimage included) to `~/.roux/swaps.json` before LND pays, waits for one confirmation of the provider's funding, claims the contract to an LND address through Bitcoin Core, and prints the final swap state and confirmed claim transaction ID.
 
 The beignet provider needs `BEIGNET_SWAPS=true` and spendable on-chain funds. Your node needs enough outbound Lightning liquidity and a route to the provider. Bitcoin Core must track the same network and provide the RPC used to verify and broadcast the claim. No JIT channel acceptor is needed for this flow over existing channels. The on-chain claim pays a miner fee, in addition to the provider's quoted swap fees.
 
@@ -61,7 +61,7 @@ BITCOIN_RPC='127.0.0.1:18443' BITCOIN_RPC_USER=u BITCOIN_RPC_PASS=p \
 NETWORK=regtest AMOUNT_SATS=100000 npm run example:lnd-reverse-swap
 ```
 
-`RESUME=1` re-checks every unresolved swap in the file instead of opening a new one. Treat `~/.chicory/swaps.json` as a wallet file.
+`RESUME=1` re-checks every unresolved swap in the file instead of opening a new one. Treat `~/.roux/swaps.json` as a wallet file.
 
 ## CLN: Lightning to on-chain (reverse swap)
 
@@ -73,11 +73,11 @@ BITCOIN_RPC='127.0.0.1:18443' BITCOIN_RPC_USER=u BITCOIN_RPC_PASS=p \
 NETWORK=regtest AMOUNT_SATS=100000 npm run example:cln-reverse-swap
 ```
 
-Both reverse examples use `~/.chicory/swaps.json`. Use a separate storage path for independent nodes or networks. On regtest, mine blocks to confirm the provider's funding and your claim. Live tests sharing the same Docker node should run sequentially, including Chicory and beignet CLN suites.
+Both reverse examples use `~/.roux/swaps.json`. Use a separate storage path for independent nodes or networks. On regtest, mine blocks to confirm the provider's funding and your claim. Live tests sharing the same Docker node should run sequentially, including Roux and beignet CLN suites.
 
 ## LND: on-chain to Lightning (submarine swap)
 
-[lnd-submarine-swap.ts](lnd-submarine-swap.ts) moves an on-chain coin from LND's wallet into LND's own Lightning balance through a beignet provider running the submarine role (`BEIGNET_SWAP_SUBMARINE=true`). chicory quotes, has LND mint the invoice (or takes `INVOICE=<bolt11>` of your own for exactly the quoted amount), verifies the provider's terms and the CLTV fit, writes the record (refund key included) to `~/.chicory/swaps.json` before anything is funded, pays the contract from LND's wallet through `sendcoins`, and follows the swap: SETTLED once the provider pays the invoice and claims, or REFUNDED after the refund height. The refund never goes out while LND holds the provider's HTLC, and the process (or `RESUME=1`) must be running past the refund height for it to happen.
+[lnd-submarine-swap.ts](lnd-submarine-swap.ts) moves an on-chain coin from LND's wallet into LND's own Lightning balance through a beignet provider running the submarine role (`BEIGNET_SWAP_SUBMARINE=true`). roux quotes, has LND mint the invoice (or takes `INVOICE=<bolt11>` of your own for exactly the quoted amount), verifies the provider's terms and the CLTV fit, writes the record (refund key included) to `~/.roux/swaps.json` before anything is funded, pays the contract from LND's wallet through `sendcoins`, and follows the swap: SETTLED once the provider pays the invoice and claims, or REFUNDED after the refund height. The refund never goes out while LND holds the provider's HTLC, and the process (or `RESUME=1`) must be running past the refund height for it to happen.
 
 The provider needs outbound Lightning liquidity toward your node and a route to it. Your node needs a channel already; a swap into a channel the provider would open for you at the same time is refused. LND needs `invoices:read`, `invoices:write` and `onchain:write` on top of the reverse permissions.
 
@@ -116,7 +116,7 @@ npm run example:lnd-pay
 
 Use the complete request issued by the receiver, rather than assembling one from the placeholders. Set `AMOUNT_SATS` when the request leaves the amount to the payer. This script uses an ephemeral peer identity for the payment; it does not require a Lightning channel from LND to the receiver.
 
-The result prints the status, funding transaction id and receipt or caveat. Payment records are stored at `~/.chicory/lnd-payments.json`. A released funding witness can still be broadcast even if the receipt is missing. Preserve the records and use `client.directFunding.reconcile()` and `payments()` in the continuing application to track confirmation. The example exits after the payment attempt; its output alone is not confirmation.
+The result prints the status, funding transaction id and receipt or caveat. Payment records are stored at `~/.roux/lnd-payments.json`. A released funding witness can still be broadcast even if the receipt is missing. Preserve the records and use `client.directFunding.reconcile()` and `payments()` in the continuing application to track confirmation. The example exits after the payment attempt; its output alone is not confirmation.
 
 ## LDK: receive with JIT liquidity
 
@@ -170,4 +170,4 @@ NETWORK=regtest MAX_FEE_SATS=1000 \
 npm run example:ldk-pay
 ```
 
-Use the receiver's complete request. `ESPLORA` must serve raw transactions at `/tx/<txid>/hex` for verification. Set `AMOUNT_SATS` for an amountless request. One coin must cover the payment and fees. Records are stored at `~/.chicory/payments.json`; preserve them and reconcile pending funding before reusing a coin.
+Use the receiver's complete request. `ESPLORA` must serve raw transactions at `/tx/<txid>/hex` for verification. Set `AMOUNT_SATS` for an amountless request. One coin must cover the payment and fees. Records are stored at `~/.roux/payments.json`; preserve them and reconcile pending funding before reusing a coin.

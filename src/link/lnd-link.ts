@@ -18,7 +18,7 @@
  */
 
 import { message } from 'beignet/lightning';
-import { ChicoryLog, noopLog } from '../types';
+import { RouxLog, noopLog } from '../types';
 import { ICustomMessage, IPeerLink, deliverIsolated } from './types';
 import { IHttpEndpoint, IStreamHandle, requestJson, streamLines } from './http';
 
@@ -35,7 +35,7 @@ export interface ILndPeerLinkOptions {
 	peerRefreshMs?: number;
 	/** Pause before re-opening a dropped subscription (default 2 s). */
 	resubscribeDelayMs?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 interface ILndCustomMessage {
@@ -46,7 +46,7 @@ interface ILndCustomMessage {
 
 export class LndPeerLink implements IPeerLink {
 	private readonly ep: IHttpEndpoint;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	private readonly listeners = new Set<(msg: ICustomMessage) => void>();
 	private readonly connected = new Set<string>();
 	private nodeId: string | null = null;

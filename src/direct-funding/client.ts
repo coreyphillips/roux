@@ -22,19 +22,19 @@
  *     │<── DIRECT_FUNDING_RECEIPT (21) ─────┤  preimage of the receipt hash
  *
  * Every frame is sealed to a per-request key, so the lane it rides carries
- * bytes it cannot read. chicory serves two of beignet's three lanes: a direct
+ * bytes it cannot read. roux serves two of beignet's three lanes: a direct
  * peer connection to the receiver, and a blind relay through the receiver's
- * LSP. The onion-message lane needs a BOLT 12 onion stack chicory does not
+ * LSP. The onion-message lane needs a BOLT 12 onion stack roux does not
  * carry; a request that offers ONLY that lane is reported unreachable.
  *
  * The engine itself is beignet's (`DirectFundingSender`), unchanged: what
- * chicory adds is a link to run it over and a wallet to give it coins.
+ * roux adds is a link to run it over and a wallet to give it coins.
  */
 
 import { directFunding } from 'beignet/lightning';
 import {
-	ChicoryLog,
-	ChicoryNetwork,
+	RouxLog,
+	RouxNetwork,
 	Sats,
 	noopLog,
 	toBeignetNetwork,
@@ -53,7 +53,7 @@ export type DirectFundingErrorCode = directFunding.DirectFundingErrorCode;
 
 export interface IDirectFundingClientOptions {
 	link: IPeerLink;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	/** The coins to pay with, and how to sign them. */
 	wallet: directFunding.IDfSenderWallet;
 	/** Where payment records live (default: this process only). */
@@ -65,7 +65,7 @@ export interface IDirectFundingClientOptions {
 	refuseEphemeralStorage?: boolean;
 	/** Engine tuning: fee ceiling default, resend schedule, timeouts. */
 	sender?: directFunding.IDfSenderConfig;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 export interface IDirectFundingTransportInfo {
@@ -75,7 +75,7 @@ export interface IDirectFundingTransportInfo {
 		| 'lsp_relay'
 		| 'rendezvous'
 		| 'unknown';
-	/** Whether chicory can carry frames over this lane. */
+	/** Whether roux can carry frames over this lane. */
 	supported: boolean;
 	host?: string;
 	port?: number;
@@ -93,7 +93,7 @@ export interface IDirectFundingRequestInfo {
 	amountSat?: bigint;
 	receiptHashHex: string;
 	transports: IDirectFundingTransportInfo[];
-	/** At least one lane chicory can use. */
+	/** At least one lane roux can use. */
 	reachable: boolean;
 	/** The bare envelope, with the BIP 21 wrapper stripped. */
 	encoded: string;
@@ -114,7 +114,7 @@ export class DirectFundingClient {
 	private readonly store: directFunding.DirectFundingPaymentStore;
 	private readonly registry: directFunding.DfTransportRegistry;
 	private readonly chainHash: Buffer;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	private started = false;
 
 	private readonly wallet: directFunding.IDfSenderWallet;

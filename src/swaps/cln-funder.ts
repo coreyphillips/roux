@@ -6,7 +6,7 @@
  */
 
 import * as bitcoin from 'bitcoinjs-lib';
-import { ChicoryLog, ChicoryNetwork, noopLog } from '../types';
+import { RouxLog, RouxNetwork, noopLog } from '../types';
 import { IHttpEndpoint, requestJson } from '../link/http';
 import { ISwapFunder } from './types';
 
@@ -15,18 +15,18 @@ export interface IClnFunderOptions {
 	/** clnrest port (default 3010). */
 	port?: number;
 	rune: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	https?: boolean;
 	ca?: IHttpEndpoint['ca'];
 	rejectUnauthorized?: boolean;
 	/** Confirmations the coins spent need (default 1). */
 	minConf?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 export class ClnFunder implements ISwapFunder {
 	private readonly ep: IHttpEndpoint;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 
 	constructor(private readonly options: IClnFunderOptions) {
 		this.ep = {

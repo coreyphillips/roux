@@ -1,5 +1,5 @@
 /**
- * `chicory/ldk`: the link for a rust-lightning application that exposes
+ * `roux/ldk`: the link for a rust-lightning application that exposes
  * the HTTP bridge described in `example/ldk-bridge/`. The application
  * supplies the wallet and payer adapters itself.
  */

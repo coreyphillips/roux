@@ -1,5 +1,5 @@
 /**
- * `chicory/cln`: everything a Core Lightning integration needs, and one
+ * `roux/cln`: everything a Core Lightning integration needs, and one
  * call that wires it up. CLN speaks over clnrest with a rune; the same
  * credentials serve the peer link (custom messages and the Socket.IO
  * notification stream), the wallet (coins, reservations, signpsbt), the
@@ -13,7 +13,7 @@ import { ClnWallet } from './direct-funding/cln-wallet';
 import { ClnPayer } from './swaps/cln-payer';
 import { ClnFunder } from './swaps/cln-funder';
 import { IHttpEndpoint } from './link/http';
-import { ChicoryLog, ChicoryNetwork } from './types';
+import { RouxLog, RouxNetwork } from './types';
 
 export { ClnPeerLink } from './link/cln-link';
 export type {
@@ -39,7 +39,7 @@ export interface IClnClientOptions
 	port?: number;
 	/** A rune permitting getinfo, listpeers, connect, sendcustommsg, listfunds, listtransactions, newaddr, reserveinputs, unreserveinputs, signpsbt, pay, listpays, and for submarine swaps invoice, listinvoices, listpeerchannels, withdraw. */
 	rune: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	https?: boolean;
 	ca?: IHttpEndpoint['ca'];
 	rejectUnauthorized?: boolean;
@@ -57,7 +57,7 @@ export interface IClnClientOptions
  * Nothing is contacted until `connect()`.
  */
 export function createClnClient(options: IClnClientOptions): BeignetClient {
-	const log: ChicoryLog | undefined = options.log;
+	const log: RouxLog | undefined = options.log;
 	const rest = {
 		host: options.host,
 		port: options.port,

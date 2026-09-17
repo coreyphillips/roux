@@ -5,7 +5,7 @@
  */
 
 import type { directFunding } from 'beignet/lightning';
-import { ChicoryLog, ChicoryNetwork, noopLog } from './types';
+import { RouxLog, RouxNetwork, noopLog } from './types';
 import { IPeerLink } from './link/types';
 import { INodeUri, parseNodeUri } from './uri';
 import { IJitClientOptions, JitClient } from './jit/client';
@@ -20,7 +20,7 @@ import { ISwapClientOptions, SwapClient } from './swaps/client';
 
 export interface IBeignetClientOptions {
 	link: IPeerLink;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	/** Coins to pay direct-funding requests with. Omit for JIT only. */
 	wallet?: directFunding.IDfSenderWallet;
 	/**
@@ -44,7 +44,7 @@ export interface IBeignetClientOptions {
 		ISwapClientOptions,
 		'payer' | 'funder' | 'chain' | 'policy' | 'destination'
 	>;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 export class BeignetClient {
@@ -52,7 +52,7 @@ export class BeignetClient {
 	readonly jit: JitClient;
 	private df: DirectFundingClient | null = null;
 	private swapClient: SwapClient | null = null;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	private readonly storage: IWalletDataStorage;
 	private readonly refuseEphemeralStorage: boolean;
 

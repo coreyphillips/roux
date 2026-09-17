@@ -19,7 +19,7 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { directFunding } from 'beignet/lightning';
-import { ChicoryNetwork, Sats, toSats } from '../types';
+import { RouxNetwork, Sats, toSats } from '../types';
 
 bitcoin.initEccLib(ecc);
 
@@ -40,7 +40,7 @@ export interface IKeyedCoin {
 }
 
 export interface IKeyedUtxoWalletOptions {
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	coins: IKeyedCoin[];
 	/** Where change goes: a script or an address of yours. */
 	changeScript?: Buffer;
@@ -65,7 +65,7 @@ interface IResolvedCoin extends directFunding.IDfSenderCoin {
 	pubkey: Buffer;
 }
 
-export function bitcoinNetwork(network: ChicoryNetwork): bitcoin.Network {
+export function bitcoinNetwork(network: RouxNetwork): bitcoin.Network {
 	switch (network) {
 		case 'mainnet':
 			return bitcoin.networks.bitcoin;

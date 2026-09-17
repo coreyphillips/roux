@@ -1,11 +1,11 @@
 /**
  * A real LND swaps Lightning balance to its own on-chain wallet through a
- * beignet provider, driven entirely by chicory: LndPeerLink carries the
+ * beignet provider, driven entirely by roux: LndPeerLink carries the
  * swap protocol over LND's own connection, LndPayer pays the hold invoice,
  * BitcoinCoreChain watches the contract and broadcasts the claim, and the
  * provider (a beignet node from source, funded by Core's wallet) settles
  * the hold the moment the claim hits the mempool. Asserted on both sides:
- * chicory ends CLAIMED, LND's payment SUCCEEDED with our preimage, and the
+ * roux ends CLAIMED, LND's payment SUCCEEDED with our preimage, and the
  * claim output confirms to LND's address.
  *
  * Opt-in: REQUIRE_SWAP_LIVE=1 with the docker stack up (bitcoind 43782,
@@ -46,7 +46,7 @@ import {
 	waitForLndSync
 } from '../swap-live-harness';
 
-describe('LND reverse swap through chicory (docker)', function () {
+describe('LND reverse swap through roux (docker)', function () {
 	this.timeout(600_000);
 	let provider: ILiveProvider | null = null;
 	let link: LndPeerLink | null = null;
@@ -67,7 +67,7 @@ describe('LND reverse swap through chicory (docker)', function () {
 
 		// A fresh key per run: the provider keeps no database between runs,
 		// and a reused key would meet LND's stale channels to its last life.
-		provider = await startProvider(`chicory-swap-provider-lnd-${Date.now()}`);
+		provider = await startProvider(`roux-swap-provider-lnd-${Date.now()}`);
 		await fundLndWallet(lnd, 110);
 		await provider.node.connectPeer(lndPubkey, LND_P2P_HOST, LND_P2P_PORT);
 		await sleep(2_000);
@@ -183,7 +183,7 @@ describe('LND reverse swap through chicory (docker)', function () {
 		}
 		await mineAndTick(p, 1);
 		await until(
-			'chicory sees the funding confirmed',
+			'roux sees the funding confirmed',
 			async () => swap.record().funding !== undefined && swap.state !== 'PAYING'
 		);
 		swap.poke();

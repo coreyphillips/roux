@@ -1,5 +1,5 @@
 /**
- * chicory's reverse swap client against beignet's REAL provider engine over
+ * roux's reverse swap client against beignet's REAL provider engine over
  * a real Noise connection on loopback TCP: the client side runs on the
  * published `beignet/lightning` build, the provider side on beignet's
  * source tree with its own test fakes for the chain, the hold invoice and
@@ -167,7 +167,7 @@ class HoldPayer implements ISwapLightningPayer {
 	}
 }
 
-describe("reverse swap: chicory against beignet's real provider engine over Noise TCP", function () {
+describe("reverse swap: roux against beignet's real provider engine over Noise TCP", function () {
 	this.timeout(60_000);
 
 	it('quotes, creates, pays, claims from the mempool and the engine settles on the preimage', async function () {
@@ -272,7 +272,7 @@ describe("reverse swap: chicory against beignet's real provider engine over Nois
 				10_000
 			);
 			expect(wallet.builds).to.have.length(1);
-			// One block confirms the funding; chicory then claims.
+			// One block confirms the funding; roux then claims.
 			const fundingTxid = ledger.list()[0].fundingTxid!;
 			chain.height += 1;
 			chain.confirm(fundingTxid, chain.height);
@@ -288,7 +288,7 @@ describe("reverse swap: chicory against beignet's real provider engine over Nois
 			expect(ledger.list()[0].state).to.equal('SETTLED');
 			expect(ledger.list()[0].preimageHex).to.equal(swap.record().preimageHex);
 			expect(holds.settled).to.have.length(1);
-			// Then the claim confirms and chicory finishes.
+			// Then the claim confirms and roux finishes.
 			chain.height += 1;
 			chain.confirm(swap.record().claim!.attempts[0].txidHex, chain.height);
 			swap.poke();

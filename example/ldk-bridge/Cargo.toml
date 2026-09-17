@@ -1,8 +1,8 @@
 [package]
-name = "chicory-ldk-bridge"
+name = "roux-ldk-bridge"
 version = "0.1.0"
 edition = "2021"
-description = "Reference CustomMessageHandler that lets chicory speak the beignet peer protocol through a rust-lightning node"
+description = "Reference CustomMessageHandler that lets roux speak the beignet peer protocol through a rust-lightning node"
 publish = false
 
 [dependencies]

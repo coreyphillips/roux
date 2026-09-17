@@ -1,5 +1,5 @@
 /**
- * chicory: the client that goes with beignet.
+ * roux: the client that goes with beignet.
  *
  * Request liquidity services from an enabled beignet node through a
  * supported node link and wallet adapter. Three protocols use beignet's
@@ -24,7 +24,7 @@
 export { BeignetClient } from './client';
 export type { IBeignetClientOptions } from './client';
 
-export type { ChicoryLog, ChicoryNetwork, Sats } from './types';
+export type { RouxLog, RouxNetwork, Sats } from './types';
 export { consoleLog, noopLog, toBeignetNetwork } from './types';
 
 export { formatNodeUri, parseNodeUri } from './uri';

@@ -56,8 +56,8 @@ describe('BeignetClient', () => {
 
 describe('FileStorage', () => {
 	it('persists atomically with owner-only permissions', () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chicory-'));
-		const file = path.join(dir, 'nested', 'chicory.json');
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'roux-'));
+		const file = path.join(dir, 'nested', 'roux.json');
 		const a = new FileStorage(file);
 		expect(a.loadWalletData('k')).to.equal(null);
 		a.saveWalletData('k', 'v1');
@@ -66,7 +66,7 @@ describe('FileStorage', () => {
 		expect(b.loadWalletData('k')).to.equal('v1');
 		expect(b.loadWalletData('j')).to.equal('v2');
 		expect(fs.statSync(file).mode & 0o777).to.equal(0o600);
-		expect(fs.readdirSync(path.dirname(file))).to.deep.equal(['chicory.json']);
+		expect(fs.readdirSync(path.dirname(file))).to.deep.equal(['roux.json']);
 		fs.rmSync(dir, { recursive: true });
 	});
 });

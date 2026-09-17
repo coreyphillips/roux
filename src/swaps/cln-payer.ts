@@ -9,7 +9,7 @@
  * invoice; CLN 23.02 or later).
  */
 
-import { ChicoryLog, ChicoryNetwork, noopLog } from '../types';
+import { RouxLog, RouxNetwork, noopLog } from '../types';
 import { HttpError, IHttpEndpoint, requestJson } from '../link/http';
 import crypto from 'crypto';
 import { toOutputScript } from './verify';
@@ -26,11 +26,11 @@ export interface IClnPayerOptions {
 	/** clnrest port (default 3010). */
 	port?: number;
 	rune: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	https?: boolean;
 	ca?: IHttpEndpoint['ca'];
 	rejectUnauthorized?: boolean;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 interface IClnPay {
@@ -70,7 +70,7 @@ function clnRpcError(err: unknown): string | null {
 
 export class ClnPayer implements ISwapLightningPayer {
 	private readonly ep: IHttpEndpoint;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 
 	constructor(private readonly options: IClnPayerOptions) {
 		this.ep = {
@@ -149,7 +149,7 @@ export class ClnPayer implements ISwapLightningPayer {
 			'invoice',
 			{
 				amount_msat: params.amountMsat.toString(),
-				label: `chicory-swap-${crypto.randomBytes(8).toString('hex')}`,
+				label: `roux-swap-${crypto.randomBytes(8).toString('hex')}`,
 				description: params.description,
 				expiry: params.expirySeconds,
 				cltv: params.minFinalCltvExpiry

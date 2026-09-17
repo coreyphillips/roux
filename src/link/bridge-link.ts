@@ -1,14 +1,14 @@
 /**
  * A link over a small HTTP bridge that a node written in another language
  * exposes: the way an LDK (rust-lightning) application, which holds its own
- * node key and peer connections, lets chicory speak the beignet protocol
+ * node key and peer connections, lets roux speak the beignet protocol
  * through them.
  *
  * rust-lightning routes unknown message types to a `CustomMessageHandler`;
  * ldk-node does not expose one, so this is for applications built on
  * rust-lightning directly. The application implements five routes (the
  * reference handler in `example/ldk-bridge/` is about 200 lines of Rust)
- * and chicory does the rest:
+ * and roux does the rest:
  *
  *   GET  /info                 -> { "nodeId": "<hex>" }
  *   GET  /peers                -> { "peers": ["<hex>", ...] }   connected now
@@ -23,7 +23,7 @@
  */
 
 import { message } from 'beignet/lightning';
-import { ChicoryLog, noopLog } from '../types';
+import { RouxLog, noopLog } from '../types';
 import { ICustomMessage, IPeerLink, deliverIsolated } from './types';
 import { IHttpEndpoint, IStreamHandle, requestJson, streamLines } from './http';
 
@@ -40,7 +40,7 @@ export interface IBridgePeerLinkOptions {
 	peerRefreshMs?: number;
 	/** Pause before re-opening a dropped event stream (default 2 s). */
 	resubscribeDelayMs?: number;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 interface IBridgeFrame {
@@ -51,7 +51,7 @@ interface IBridgeFrame {
 
 export class BridgePeerLink implements IPeerLink {
 	private readonly ep: IHttpEndpoint;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 	private readonly listeners = new Set<(msg: ICustomMessage) => void>();
 	private readonly connected = new Set<string>();
 	private nodeId: string | null = null;

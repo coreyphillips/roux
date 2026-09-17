@@ -1,10 +1,10 @@
 /**
- * chicory pays a beignet direct-funding request over a REAL Noise
- * connection, on both lanes chicory serves.
+ * roux pays a beignet direct-funding request over a REAL Noise
+ * connection, on both lanes roux serves.
  *
  * The receiver half (tests/df-harness.ts) is beignet's own engine and lanes
  * on a real listening PeerManager; the channel is the one thing stubbed.
- * The payer half is chicory: a standalone Noise link with an identity the
+ * The payer half is roux: a standalone Noise link with an identity the
  * receiver has never seen, and a KeyedUtxoWallet holding one P2WPKH coin.
  */
 
@@ -121,7 +121,7 @@ describe('Direct funding against a real beignet receiver over TCP', function () 
 
 	it('pays through a blind relay when the receiver is only reachable via its LSP', async () => {
 		// The relay: a third node, opted into forwarding for others.
-		const relayKey = sha('chicory-df-relay');
+		const relayKey = sha('roux-df-relay');
 		const relay = await listeningPeer(relayKey);
 		const forwarder = new DfRelayForwarder(relay.peers, {});
 		forwarder.start();
@@ -171,7 +171,7 @@ describe('Direct funding against a real beignet receiver over TCP', function () 
 		}
 	});
 
-	it('a request whose only lane chicory cannot carry is reported, and refused without spending', async () => {
+	it('a request whose only lane roux cannot carry is reported, and refused without spending', async () => {
 		const side = await startReceiver(
 			'onion-only',
 			() => [

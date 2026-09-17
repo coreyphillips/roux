@@ -12,7 +12,7 @@
  * macaroon has them).
  */
 
-import { ChicoryLog, ChicoryNetwork, noopLog } from '../types';
+import { RouxLog, RouxNetwork, noopLog } from '../types';
 import { HttpError, IHttpEndpoint, requestJson } from '../link/http';
 
 const PAYMENT_PAGE = 100;
@@ -35,11 +35,11 @@ export interface ILndPayerOptions {
 	/** REST port (default 8080). */
 	port?: number;
 	macaroonHex: string;
-	network: ChicoryNetwork;
+	network: RouxNetwork;
 	https?: boolean;
 	ca?: IHttpEndpoint['ca'];
 	rejectUnauthorized?: boolean;
-	log?: ChicoryLog;
+	log?: RouxLog;
 }
 
 interface ILndPayment {
@@ -66,7 +66,7 @@ function mapStatus(p: ILndPayment): ISwapPaymentStatus {
 
 export class LndPayer implements ISwapLightningPayer {
 	private readonly ep: IHttpEndpoint;
-	private readonly log: ChicoryLog;
+	private readonly log: RouxLog;
 
 	constructor(private readonly options: ILndPayerOptions) {
 		this.ep = {

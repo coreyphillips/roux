@@ -39,7 +39,7 @@
 import crypto from 'crypto';
 import * as bitcoin from 'bitcoinjs-lib';
 import { message, swaps } from 'beignet/lightning';
-import { ChicoryLog } from '../types';
+import { RouxLog } from '../types';
 import { IPeerLink } from '../link/types';
 import { exchange } from '../link/exchange';
 import { SubmarineSwapStore } from './store';
@@ -65,7 +65,7 @@ export interface ISubmarineSwapDeps {
 	chain: ISwapChain;
 	store: SubmarineSwapStore;
 	policy: ISwapClientPolicy;
-	log: ChicoryLog;
+	log: RouxLog;
 	/** Told after every persisted state change. */
 	notify?: (change: ISubmarineSwapChange) => void;
 }
@@ -237,7 +237,7 @@ export class SubmarineSwap {
 				'invoice'
 			);
 		}
-		const label = `chicory-swap-${this.rec.swapIdHex}`;
+		const label = `roux-swap-${this.rec.swapIdHex}`;
 		this.persist({
 			fundingAttempt: { requestedAt: Date.now(), label }
 		});

@@ -1,12 +1,12 @@
 //! Reference bridge for rust-lightning applications.
 //!
-//! chicory (TypeScript) speaks the beignet peer protocol: one custom BOLT 1
+//! roux (TypeScript) speaks the beignet peer protocol: one custom BOLT 1
 //! message type, 44069, on an ordinary peer connection. An LDK application
-//! holds its own node key and its own connections, so chicory does not dial
+//! holds its own node key and its own connections, so roux does not dial
 //! the beignet node itself; it asks the application to carry the frames.
 //! This crate is the application's half: a `CustomMessageHandler` that
 //! accepts type 44069 from any peer and queues outbound frames, exposed to
-//! chicory's `BridgePeerLink` through five HTTP routes the application
+//! roux's `BridgePeerLink` through five HTTP routes the application
 //! serves however it likes (axum, warp, tiny_http, ...):
 //!
 //! ```text
@@ -75,7 +75,7 @@ pub struct BeignetBridge {
 
 #[derive(Default)]
 struct Inner {
-	/// Frames chicory asked us to send, drained by the PeerManager.
+	/// Frames roux asked us to send, drained by the PeerManager.
 	outbound: VecDeque<(PublicKey, BeignetMessage)>,
 	/// Frames peers sent us, drained by the `/events` route.
 	inbound: VecDeque<InboundFrame>,

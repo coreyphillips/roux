@@ -145,7 +145,7 @@ export async function startReceiver(
 	transports: (port: number) => DfTransportDescriptor[],
 	lanes: (peers: IDfPeerMessaging, registry: DfTransportRegistry) => void
 ): Promise<IReceiverSide> {
-	const key = sha(`chicory-df-receiver-${label}`);
+	const key = sha(`roux-df-receiver-${label}`);
 	const node = new SigningDfNode(memoryStorage(), key);
 	const { pm, peers, port } = await listeningPeer(key);
 	const record = node.mintRequest(3_600_000);

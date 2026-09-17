@@ -165,10 +165,20 @@ export type {
 	ISwapInvoiceStatus,
 	ISwapLightningPayer,
 	ISwapPaymentStatus,
+	ISwapRecordSecrets,
+	ISwapSecretProvider,
 	ReverseSwapState,
 	SubmarineSwapState,
 	SwapErrorCode
 } from './swaps/types';
+export {
+	FileSecretProvider,
+	SWAP_SECRET_ID_BYTES,
+	newSwapSecretId,
+	reverseSwapSecrets,
+	submarineRefundKey,
+	swapSecretsProblem
+} from './swaps/secrets';
 export {
 	REVERSE_SWAP_STORAGE_KEY,
 	ReverseSwapStore,

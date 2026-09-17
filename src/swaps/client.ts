@@ -34,6 +34,7 @@ import {
 } from '../storage';
 import { ReverseSwapStore } from './store';
 import { ReverseSwap } from './reverse';
+import { newSwapSecretId, swapSecretsProblem } from './secrets';
 import { SubmarineSwapClient } from './submarine-client';
 import {
 	assertNativeSegwit,
@@ -47,6 +48,7 @@ import {
 	ISwapClientPolicy,
 	ISwapFunder,
 	ISwapLightningPayer,
+	ISwapSecretProvider,
 	SwapError,
 	isTerminalReverseSwapState,
 	resolvePolicy
@@ -59,6 +61,12 @@ export interface ISwapClientOptions {
 	/** Sends a submarine swap's coins; omit to fund by hand (attachFunding). */
 	funder?: ISwapFunder;
 	chain?: ISwapChain;
+	/**
+	 * The host's wallet, asked for each swap's claim key, preimage and
+	 * refund key. Given one, a record holds no secret; omitted, it holds
+	 * them in the clear and the storage is a wallet file.
+	 */
+	secrets?: ISwapSecretProvider;
 	storage?: IWalletDataStorage;
 	/**
 	 * Refuse to create a swap whose record would live in ephemeral storage
@@ -103,9 +111,9 @@ export interface IReverseSwapCreateParams {
 	amountSat: Sats;
 	/** The most to pay above the amount (sat); default 3% plus 1000. */
 	maxTotalFeeSat?: Sats;
-	/** 32-byte claim private key; random unless given. */
+	/** 32-byte claim private key; random unless given. Refused with `swaps.secrets`. */
 	claimKey?: Buffer;
-	/** 32-byte preimage; random unless given. */
+	/** 32-byte preimage; random unless given. Refused with `swaps.secrets`. */
 	preimage?: Buffer;
 	/** Native-segwit output script the claim pays; default the payer's wallet. */
 	destinationScript?: Buffer;
@@ -252,6 +260,7 @@ export class ReverseSwapClient {
 			chain,
 			store: this.store,
 			policy: this.policy,
+			secrets: this.options.secrets,
 			log: this.log,
 			notify: (change) => {
 				for (const cb of this.listeners) cb(change);
@@ -280,9 +289,12 @@ export class ReverseSwapClient {
 	): Promise<ReverseSwap> {
 		const peer = assertPubkeyHex(providerPubkeyHex, 'provider pubkey');
 		const { payer, chain } = this.deps();
+		const secrets = this.options.secrets;
 		if (this.options.refuseEphemeralStorage) {
 			throw new EphemeralStorageError(
-				'a reverse swap (its claim key and preimage)'
+				secrets
+					? 'a reverse swap (the id its claim key and preimage derive from)'
+					: 'a reverse swap (its claim key and preimage)'
 			);
 		}
 		const amountSat = toSats(params.amountSat, 'amountSat');
@@ -292,10 +304,24 @@ export class ReverseSwapClient {
 			params.maxTotalFeeSat !== undefined
 				? toSats(params.maxTotalFeeSat, 'maxTotalFeeSat')
 				: amountSat / 33n + 1_000n;
-		const preimage = params.preimage ?? crypto.randomBytes(32);
+		if (secrets && (params.preimage || params.claimKey)) {
+			throw new SwapError(
+				'claimKey and preimage come from swaps.secrets; a supplied one could ' +
+					'not be re-derived and would have to be written to the record',
+				'policy'
+			);
+		}
+		// The id is chosen here, before any wire traffic: the payment hash
+		// comes from the preimage, so the provider's swap id is too late.
+		const secretIdHex = secrets ? newSwapSecretId() : undefined;
+		const preimage = secretIdHex
+			? await secrets!.derivePreimage(secretIdHex)
+			: params.preimage ?? crypto.randomBytes(32);
 		if (preimage.length !== 32)
 			throw new SwapError('preimage must be 32 bytes', 'policy');
-		const claimKey = params.claimKey ?? crypto.randomBytes(32);
+		const claimKey = secretIdHex
+			? await secrets!.deriveClaimKey(secretIdHex)
+			: params.claimKey ?? crypto.randomBytes(32);
 		if (!bcrypto.isValidPrivateKey(claimKey))
 			throw new SwapError('claimKey is not a valid scalar', 'policy');
 		const paymentHash = crypto.createHash('sha256').update(preimage).digest();
@@ -368,8 +394,13 @@ export class ReverseSwapClient {
 			createdAt: Date.now(),
 			createdHeight: currentHeight,
 			paymentHashHex: paymentHash.toString('hex'),
-			preimageHex: preimage.toString('hex'),
-			claimPrivkeyHex: claimKey.toString('hex'),
+			// Either the record carries the secrets or it names what derives them.
+			...(secretIdHex
+				? { secrets: { provider: secrets!.id, idHex: secretIdHex } }
+				: {
+						preimageHex: preimage.toString('hex'),
+						claimPrivkeyHex: claimKey.toString('hex')
+				  }),
 			claimPubkeyHex: claimPubkey.toString('hex'),
 			refundPubkeyHex: terms.htlc.refundPublicKey.toString('hex'),
 			refundHeight: terms.htlc.refundHeight,
@@ -411,7 +442,9 @@ export class ReverseSwapClient {
 	 * After a restart: every record is re-checked against the node and the
 	 * chain. A CREATED record whose payment the node knows nothing about is
 	 * reported, and paid only when asked (`pay: true`); `run: true` starts
-	 * the loops for everything unresolved.
+	 * the loops for everything unresolved. A record naming a secret provider
+	 * this client was not given is reported as an error and left alone: it
+	 * belongs to another wallet, and nothing here could claim it.
 	 */
 	async resume(
 		opts: { pay?: boolean; run?: boolean } = {}
@@ -425,6 +458,11 @@ export class ReverseSwapClient {
 		for (const record of this.store.restore()) {
 			if (isTerminalReverseSwapState(record.state)) {
 				report.terminal++;
+				continue;
+			}
+			const problem = swapSecretsProblem(record, this.options.secrets);
+			if (problem) {
+				report.errors.push({ swapIdHex: record.swapIdHex, error: problem });
 				continue;
 			}
 			const swap = this.wrap(record);

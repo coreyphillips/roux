@@ -231,7 +231,7 @@ describe('SubmarineSwap lifecycle', function () {
 			rec.refund!.attempts[0].rawHex
 		);
 		expect(s.chain.broadcasts).to.have.length(0);
-		const tx = bitcoin.Transaction.fromHex(rec.refund!.attempts[0].rawHex);
+		const tx = bitcoin.Transaction.fromHex(rec.refund!.attempts[0].rawHex!);
 		expect(tx.locktime).to.equal(rec0.refundHeight);
 		expect(tx.ins[0].witness).to.have.length(3);
 		expect(tx.outs[0].script.toString('hex')).to.equal(

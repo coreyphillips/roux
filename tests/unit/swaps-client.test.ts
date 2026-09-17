@@ -118,7 +118,7 @@ describe('SwapClient quote and create', function () {
 		expect(
 			crypto
 				.createHash('sha256')
-				.update(Buffer.from(r.preimageHex, 'hex'))
+				.update(Buffer.from(r.preimageHex!, 'hex'))
 				.digest()
 				.toString('hex')
 		).to.equal(r.paymentHashHex);
@@ -145,7 +145,7 @@ describe('SwapClient quote and create', function () {
 		expect(swap.pay()).to.equal(paying);
 		s.payer.settle(
 			swap.record().paymentHashHex,
-			Buffer.from(swap.record().preimageHex, 'hex')
+			Buffer.from(swap.record().preimageHex!, 'hex')
 		);
 		const status = await paying;
 		expect(status.status).to.equal('succeeded');

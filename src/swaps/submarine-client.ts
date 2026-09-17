@@ -26,6 +26,7 @@ import {
 import { exchange } from '../link/exchange';
 import { EphemeralStorageError, MemoryStorage } from '../storage';
 import { SubmarineSwapStore } from './store';
+import { newSwapSecretId, swapSecretsProblem } from './secrets';
 import { SubmarineSwap } from './submarine';
 import {
 	assertNativeSegwit,
@@ -54,7 +55,7 @@ export interface ISubmarineSwapCreateParams {
 	invoice?: string;
 	/** The most to give up below the amount (sat); default 3% plus 1000. */
 	maxTotalFeeSat?: Sats;
-	/** 32-byte refund private key; random unless given. */
+	/** 32-byte refund private key; random unless given. Refused with `swaps.secrets`. */
 	refundKey?: Buffer;
 	/** Native-segwit output script a refund pays; default the payer's wallet. */
 	refundDestinationScript?: Buffer;
@@ -118,6 +119,7 @@ export class SubmarineSwapClient {
 			chain,
 			store: this.store,
 			policy: this.policy,
+			secrets: this.options.secrets,
 			log: this.log,
 			notify: (change) => {
 				for (const cb of this.listeners) cb(change);
@@ -147,8 +149,13 @@ export class SubmarineSwapClient {
 	): Promise<SubmarineSwap> {
 		const peer = assertPubkeyHex(providerPubkeyHex, 'provider pubkey');
 		const { payer, chain } = this.deps();
+		const secrets = this.options.secrets;
 		if (this.options.refuseEphemeralStorage) {
-			throw new EphemeralStorageError('a submarine swap (its refund key)');
+			throw new EphemeralStorageError(
+				secrets
+					? 'a submarine swap (the id its refund key derives from)'
+					: 'a submarine swap (its refund key)'
+			);
 		}
 		const amountSat = toSats(params.amountSat, 'amountSat');
 		if (amountSat <= 0n)
@@ -157,7 +164,17 @@ export class SubmarineSwapClient {
 			params.maxTotalFeeSat !== undefined
 				? toSats(params.maxTotalFeeSat, 'maxTotalFeeSat')
 				: amountSat / 33n + 1_000n;
-		const refundKey = params.refundKey ?? crypto.randomBytes(32);
+		if (secrets && params.refundKey) {
+			throw new SwapError(
+				'refundKey comes from swaps.secrets; a supplied one could not be ' +
+					're-derived and would have to be written to the record',
+				'policy'
+			);
+		}
+		const secretIdHex = secrets ? newSwapSecretId() : undefined;
+		const refundKey = secretIdHex
+			? await secrets!.deriveRefundKey(secretIdHex)
+			: params.refundKey ?? crypto.randomBytes(32);
 		if (!bcrypto.isValidPrivateKey(refundKey))
 			throw new SwapError('refundKey is not a valid scalar', 'policy');
 		const refundPubkey = bcrypto.getPublicKey(refundKey);
@@ -371,7 +388,10 @@ export class SubmarineSwapClient {
 			createdAt: Date.now(),
 			createdHeight: currentHeight,
 			paymentHashHex: paymentHash.toString('hex'),
-			refundPrivkeyHex: refundKey.toString('hex'),
+			// Either the record carries the refund key or it names what derives it.
+			...(secretIdHex
+				? { secrets: { provider: secrets!.id, idHex: secretIdHex } }
+				: { refundPrivkeyHex: refundKey.toString('hex') }),
 			refundPubkeyHex: refundPubkey.toString('hex'),
 			claimPubkeyHex: terms.htlc.claimPublicKey.toString('hex'),
 			refundHeight: terms.htlc.refundHeight,
@@ -434,7 +454,9 @@ export class SubmarineSwapClient {
 	 * chain. A CREATED record nothing was sent for is reported and funded
 	 * only when asked (`fund: true`); one whose funding call was made and
 	 * lost is reported and NEVER funded again by this call; `run: true`
-	 * starts the loops for everything unresolved.
+	 * starts the loops for everything unresolved. A record naming a secret
+	 * provider this client was not given is reported as an error and left
+	 * alone: it belongs to another wallet, and nothing here could refund it.
 	 */
 	async resume(
 		opts: { fund?: boolean; run?: boolean } = {}
@@ -449,6 +471,11 @@ export class SubmarineSwapClient {
 		for (const record of this.store.restore()) {
 			if (isTerminalSubmarineSwapState(record.state)) {
 				report.terminal++;
+				continue;
+			}
+			const problem = swapSecretsProblem(record, this.options.secrets);
+			if (problem) {
+				report.errors.push({ swapIdHex: record.swapIdHex, error: problem });
 				continue;
 			}
 			const swap = this.wrap(record);

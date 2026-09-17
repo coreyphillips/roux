@@ -23,6 +23,9 @@
  * height, the client refunds itself. The same chain seam serves it, the
  * Lightning seam grows invoice creation and lookup, and a third seam
  * (ISwapFunder) sends the coins.
+ *
+ * One optional seam, ISwapSecretProvider, moves a swap's secrets out of
+ * the record and into the host's wallet; see secrets.ts.
  */
 
 import { RouxNetwork } from '../types';
@@ -95,6 +98,41 @@ export interface ISwapFunder {
 		address: string,
 		label: string
 	): Promise<{ txidHex: string; vout: number } | null>;
+}
+
+/**
+ * The host's wallet, asked for one swap's secrets instead of roux writing
+ * them down. Given one, a record holds only the swap's public material and
+ * a non-secret id, and the claim key, preimage or refund key are derived
+ * again whenever a claim or a refund has to be signed. HKDF from a
+ * wallet-held seed is the natural implementation; `FileSecretProvider` is
+ * the one roux ships.
+ *
+ * Every method takes the record's `secrets.idHex`, the 16 random bytes roux
+ * chose for the swap before any wire traffic (the provider names the swap
+ * only in its ack, too late for the preimage the payment hash comes from).
+ * A derivation must therefore depend on nothing but the seed and that id,
+ * and must answer the same bytes for the life of the swap. Roux checks what
+ * comes back against the record's payment hash and public keys, so a wrong
+ * seed is an error rather than a transaction that pays nobody.
+ */
+export interface ISwapSecretProvider {
+	/** Named on every record this provider derives for; `resume()` matches it. */
+	readonly id: string;
+	/** Reverse swaps: the 32-byte preimage the payment hash is taken from. */
+	derivePreimage(idHex: string): Buffer | Promise<Buffer>;
+	/** Reverse swaps: the scalar that signs the claim. */
+	deriveClaimKey(idHex: string): Buffer | Promise<Buffer>;
+	/** Submarine swaps: the scalar that signs the refund. */
+	deriveRefundKey(idHex: string): Buffer | Promise<Buffer>;
+}
+
+/** What a record says about the secrets it does not hold. */
+export interface ISwapRecordSecrets {
+	/** The `ISwapSecretProvider.id` that derived them. */
+	provider: string;
+	/** The id they were derived from; not secret. */
+	idHex: string;
 }
 
 export interface ISwapChainOutput {
@@ -274,7 +312,12 @@ export function isTerminalReverseSwapState(state: ReverseSwapState): boolean {
 
 export interface IReverseSwapClaimAttempt {
 	txidHex: string;
-	rawHex: string;
+	/**
+	 * The signed transaction. A claim's witness carries the preimage, so it
+	 * is written only once a broadcast has published it; a refund's witness
+	 * holds no secret and is written when it is built.
+	 */
+	rawHex?: string;
 	feeSat: string;
 	feeRateSatPerVb: number;
 	builtAt: number;
@@ -283,8 +326,9 @@ export interface IReverseSwapClaimAttempt {
 }
 
 /**
- * One swap as this device knows it. Holds the claim key and the preimage:
- * a claim after a crash needs exactly those and nothing else. Bigints are
+ * One swap as this device knows it. A claim after a crash needs the claim
+ * key and the preimage and nothing else, so the record holds them, unless
+ * `secrets` names the host provider that derives them instead. Bigints are
  * decimal strings and buffers hex, so the record is plain JSON.
  */
 export interface IReverseSwapRecord {
@@ -295,8 +339,11 @@ export interface IReverseSwapRecord {
 	createdAt: number;
 	createdHeight: number;
 	paymentHashHex: string;
-	preimageHex: string;
-	claimPrivkeyHex: string;
+	/** Absent when `secrets` is set: derived on demand instead. */
+	preimageHex?: string;
+	claimPrivkeyHex?: string;
+	/** Set when the host's wallet keeps the two above. */
+	secrets?: ISwapRecordSecrets;
 	claimPubkeyHex: string;
 	refundPubkeyHex: string;
 	refundHeight: number;
@@ -350,6 +397,7 @@ export type SwapErrorCode =
 	| 'funding_unconfirmed'
 	| 'storage'
 	| 'state'
+	| 'secrets'
 	// Submarine swaps.
 	| 'invoice'
 	| 'cltv_unsafe'
@@ -409,9 +457,10 @@ export function isTerminalSubmarineSwapState(
 export type ISubmarineSwapRefundAttempt = IReverseSwapClaimAttempt;
 
 /**
- * One submarine swap as this device knows it. Holds the refund private
- * key: a refund after a crash needs exactly that. No preimage: the invoice
- * is the node's, and the provider learns the preimage by paying it.
+ * One submarine swap as this device knows it. A refund after a crash needs
+ * the refund private key, so the record holds it unless `secrets` names the
+ * host provider that derives it instead. No preimage either way: the
+ * invoice is the node's, and the provider learns the preimage by paying it.
  */
 export interface ISubmarineSwapRecord {
 	version: 1;
@@ -421,7 +470,10 @@ export interface ISubmarineSwapRecord {
 	createdAt: number;
 	createdHeight: number;
 	paymentHashHex: string;
-	refundPrivkeyHex: string;
+	/** Absent when `secrets` is set: derived on demand instead. */
+	refundPrivkeyHex?: string;
+	/** Set when the host's wallet keeps the refund key. */
+	secrets?: ISwapRecordSecrets;
 	refundPubkeyHex: string;
 	claimPubkeyHex: string;
 	refundHeight: number;

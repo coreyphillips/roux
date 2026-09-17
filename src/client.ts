@@ -24,11 +24,12 @@ export interface IBeignetClientOptions {
 	/** Coins to pay direct-funding requests with. Omit for JIT only. */
 	wallet?: directFunding.IDfSenderWallet;
 	/**
-	 * Durable home for direct-funding payment records and swap records (a
-	 * swap record holds its claim or refund key, and for reverse swaps the
-	 * preimage: treat the storage as a wallet file). Omitted, records live in this process only and every
-	 * operation that moves funds refuses to start, unless
-	 * `allowEphemeralStorage` says that is intended.
+	 * Durable home for direct-funding payment records and swap records.
+	 * Without `swaps.secrets` a swap record holds its claim or refund key,
+	 * and for reverse swaps the preimage, so treat the storage as a wallet
+	 * file. Omitted, records live in this process only and every operation
+	 * that moves funds refuses to start, unless `allowEphemeralStorage`
+	 * says that is intended.
 	 */
 	storage?: IWalletDataStorage;
 	/** Let fund-moving operations run on defaulted, in-process storage. */
@@ -38,11 +39,12 @@ export interface IBeignetClientOptions {
 	/**
 	 * Swaps in both directions: a node that pays and mints invoices, a chain
 	 * source, and for submarine swaps a funder that sends the coins (omit it
-	 * to fund by hand). Omit all for quotes only.
+	 * to fund by hand). `secrets` keeps the swap keys and preimages out of
+	 * the records. Omit all for quotes only.
 	 */
 	swaps?: Pick<
 		ISwapClientOptions,
-		'payer' | 'funder' | 'chain' | 'policy' | 'destination'
+		'payer' | 'funder' | 'chain' | 'secrets' | 'policy' | 'destination'
 	>;
 	log?: RouxLog;
 }

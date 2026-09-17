@@ -3,13 +3,16 @@
  * keys `swaps:reverse` and `swaps:submarine` of the host's
  * IWalletDataStorage.
  *
- * Unlike the direct-funding payment record, a swap record IS key material:
- * a reverse record holds the claim private key and the preimage, a
- * submarine record the refund private key, because a claim or refund after
- * a crash needs exactly those. A host must treat the storage it hands
- * roux as it would a wallet file (encrypt at rest, restrict its mode). A
- * key-deriving hook, so nothing secret is written, is a documented
- * follow-up (roux issue #1) for both directions.
+ * Unlike the direct-funding payment record, a swap record is key material
+ * by default: a reverse record holds the claim private key and the
+ * preimage, a submarine record the refund private key, because a claim or
+ * refund after a crash needs exactly those. A host must then treat the
+ * storage it hands roux as it would a wallet file (encrypt at rest,
+ * restrict its mode). With an ISwapSecretProvider (`swaps.secrets`, see
+ * secrets.ts) the records hold only public material and the id the secrets
+ * derive from, and the provider's seed is what needs the wallet file's
+ * care; the records still have to be durable, since losing the id loses
+ * the secrets with it.
  */
 
 import { IWalletDataStorage } from '../storage';
@@ -18,14 +21,22 @@ import { IReverseSwapRecord, ISubmarineSwapRecord, SwapError } from './types';
 export const REVERSE_SWAP_STORAGE_KEY = 'swaps:reverse';
 export const SUBMARINE_SWAP_STORAGE_KEY = 'swaps:submarine';
 
+/**
+ * Version 2 is a document holding at least one record whose secrets are
+ * derived (`secrets`), which a roux that predates the seam would read as a
+ * record with its key missing: it would fund a swap it could never refund.
+ * Version 1 is every other document, so a host not using the seam keeps a
+ * store the older client can still read.
+ */
 interface IDocument<T> {
-	version: 1;
+	version: 1 | 2;
 	swaps: Record<string, T>;
 }
 
 interface ISwapRecordLike {
 	swapIdHex: string;
 	paymentHashHex: string;
+	secrets?: { provider: string; idHex: string };
 }
 
 export class SwapStore<T extends ISwapRecordLike> {
@@ -53,13 +64,13 @@ export class SwapStore<T extends ISwapRecordLike> {
 				const parsed = JSON.parse(raw) as Partial<IDocument<T>>;
 				if (
 					parsed &&
-					parsed.version === 1 &&
+					(parsed.version === 1 || parsed.version === 2) &&
 					parsed.swaps &&
 					typeof parsed.swaps === 'object'
 				) {
-					doc = { version: 1, swaps: parsed.swaps };
+					doc = { version: parsed.version, swaps: parsed.swaps };
 				} else {
-					problem = 'not a version 1 swap document';
+					problem = 'not a version 1 or 2 swap document';
 				}
 			} catch (err) {
 				problem = err instanceof Error ? err.message : String(err);
@@ -105,6 +116,7 @@ export class SwapStore<T extends ISwapRecordLike> {
 		const doc = this.load();
 		const stored = { ...record, updatedAt: Date.now() };
 		doc.swaps[record.swapIdHex] = stored;
+		doc.version = Object.values(doc.swaps).some((r) => r.secrets) ? 2 : 1;
 		this.storage.saveWalletData(this.key, JSON.stringify(doc));
 		return { ...stored };
 	}

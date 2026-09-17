@@ -38,6 +38,7 @@ import { IPeerLink } from '../link/types';
 import { exchange } from '../link/exchange';
 import { ReverseSwapStore } from './store';
 import { claimFeeForRate, bumpedFeeRate, replacementFloor } from './fees';
+import { reverseSwapSecrets } from './secrets';
 import { isRefundWitness, verifyFundingOutput } from './verify';
 import {
 	IReverseSwapChange,
@@ -46,6 +47,7 @@ import {
 	ISwapClientPolicy,
 	ISwapLightningPayer,
 	ISwapPaymentStatus,
+	ISwapSecretProvider,
 	SwapError,
 	isTerminalReverseSwapState
 } from './types';
@@ -57,6 +59,8 @@ export interface IReverseSwapDeps {
 	store: ReverseSwapStore;
 	policy: ISwapClientPolicy;
 	log: RouxLog;
+	/** Derives the claim key and preimage when the record does not hold them. */
+	secrets?: ISwapSecretProvider;
 	/** Told after every persisted state change. */
 	notify?: (change: IReverseSwapChange) => void;
 }
@@ -76,6 +80,8 @@ export class ReverseSwap {
 	private running: Promise<IReverseSwapRecord> | null = null;
 	private ticking: Promise<void> | null = null;
 	private paying: Promise<ISwapPaymentStatus> | null = null;
+	/** The signed claim, held here until a broadcast publishes its preimage. */
+	private builtClaim: { txidHex: string; rawHex: string } | null = null;
 
 	constructor(
 		record: IReverseSwapRecord,
@@ -583,9 +589,9 @@ export class ReverseSwap {
 		if (!funding) {
 			throw new SwapError('no funding is recorded for this swap', 'state');
 		}
-		// Preparation first: the funding bytes, the fee estimate and the
-		// signed claim. Every one of these awaits a backend, and the world
-		// moves while they do.
+		// Preparation first: the funding bytes, the fee estimate, the secrets
+		// and the signed claim. Every one of these awaits a backend, and the
+		// world moves while they do.
 		const raw = await this.deps.chain.getTransaction(
 			funding.txidHex,
 			funding.confirmedHeight
@@ -599,6 +605,10 @@ export class ReverseSwap {
 			opts.feeRateSatPerVb ??
 			(await this.deps.chain.estimateFeeRateSatPerVb?.(2)) ??
 			this.deps.policy.defaultFeeRateSatPerVb;
+		const { privateKey, preimage } = await reverseSwapSecrets(
+			this.rec,
+			this.deps.secrets
+		);
 		const built = claimFeeForRate(
 			(feeSat) =>
 				swaps.buildSwapClaimTx({
@@ -607,8 +617,8 @@ export class ReverseSwap {
 					outputIndex: funding.vout,
 					destinationScript: Buffer.from(this.rec.destinationScriptHex, 'hex'),
 					feeSatoshis: feeSat,
-					privateKey: Buffer.from(this.rec.claimPrivkeyHex, 'hex'),
-					preimage: Buffer.from(this.rec.preimageHex, 'hex')
+					privateKey,
+					preimage
 				}),
 			rate,
 			this.deps.policy
@@ -663,12 +673,14 @@ export class ReverseSwap {
 		}
 		const attempt = {
 			txidHex: built.tx.getId(),
-			rawHex: built.tx.toHex(),
 			feeSat: built.feeSat.toString(),
 			feeRateSatPerVb: built.feeRateSatPerVb,
 			builtAt: Date.now()
 		};
-		// Persisted BEFORE broadcast: a crash after the send still knows the bytes.
+		// Persisted BEFORE broadcast: a crash after the send still knows the
+		// txid, which is how a spender is recognised as ours. The bytes hold
+		// the preimage and wait in memory until a broadcast publishes it.
+		this.builtClaim = { txidHex: attempt.txidHex, rawHex: built.tx.toHex() };
 		this.persist({
 			state: 'CLAIM_BROADCAST',
 			claim: { attempts: [...(this.rec.claim?.attempts ?? []), attempt] }
@@ -677,14 +689,29 @@ export class ReverseSwap {
 		return attempt.txidHex;
 	}
 
+	/** The latest attempt's bytes: on the record once public, in memory before. */
+	private latestClaimHex(): string | null {
+		const attempts = this.rec.claim?.attempts ?? [];
+		const latest = attempts[attempts.length - 1];
+		if (!latest) return null;
+		if (latest.rawHex) return latest.rawHex;
+		return this.builtClaim?.txidHex === latest.txidHex
+			? this.builtClaim.rawHex
+			: null;
+	}
+
 	private async broadcastLatest(tip: number): Promise<void> {
 		const attempts = this.rec.claim!.attempts;
 		const latest = attempts[attempts.length - 1];
+		const rawHex = this.latestClaimHex();
+		// An attempt that never reached a node left its bytes with the process
+		// that built them; followClaim signs the claim again instead.
+		if (!rawHex) return;
 		try {
-			await this.deps.chain.broadcast(latest.rawHex);
+			await this.deps.chain.broadcast(rawHex);
 			const updated = attempts.map((a, i) =>
 				i === attempts.length - 1 && a.broadcastAt === undefined
-					? { ...a, broadcastAt: Date.now(), broadcastHeight: tip }
+					? { ...a, rawHex, broadcastAt: Date.now(), broadcastHeight: tip }
 					: a
 			);
 			this.persist({
@@ -734,7 +761,8 @@ export class ReverseSwap {
 		const latest = attempts[attempts.length - 1];
 		if (!latest) return;
 		if (latest.broadcastAt === undefined) {
-			await this.broadcastLatest(tip);
+			if (this.latestClaimHex()) await this.broadcastLatest(tip);
+			else await this.claim();
 			return;
 		}
 		const due =
@@ -763,6 +791,10 @@ export class ReverseSwap {
 		const rate = bumpedFeeRate(latest.feeRateSatPerVb, this.deps.policy);
 		let built;
 		try {
+			const { privateKey, preimage } = await reverseSwapSecrets(
+				this.rec,
+				this.deps.secrets
+			);
 			built = claimFeeForRate(
 				(feeSat) =>
 					swaps.buildSwapClaimTx({
@@ -774,8 +806,8 @@ export class ReverseSwap {
 							'hex'
 						),
 						feeSatoshis: feeSat,
-						privateKey: Buffer.from(this.rec.claimPrivkeyHex, 'hex'),
-						preimage: Buffer.from(this.rec.preimageHex, 'hex')
+						privateKey,
+						preimage
 					}),
 				rate,
 				this.deps.policy
@@ -798,11 +830,11 @@ export class ReverseSwap {
 		}
 		const attempt = {
 			txidHex: built.tx.getId(),
-			rawHex: built.tx.toHex(),
 			feeSat: built.feeSat.toString(),
 			feeRateSatPerVb: built.feeRateSatPerVb,
 			builtAt: Date.now()
 		};
+		this.builtClaim = { txidHex: attempt.txidHex, rawHex: built.tx.toHex() };
 		this.persist({
 			claim: { ...this.rec.claim!, attempts: [...attempts, attempt] }
 		});

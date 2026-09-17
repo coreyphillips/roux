@@ -99,11 +99,11 @@ describe('BeignetClient records and lifecycle', function () {
 		expect(saved.get(REVERSE_SWAP_STORAGE_KEY)).to.equal(
 			'{"version":1,"swaps":"not a map"'
 		);
-		// The same for a document of the wrong shape.
+		// The same for a document of a version this roux does not know.
 		saved.clear();
 		saved.set(
 			REVERSE_SWAP_STORAGE_KEY,
-			JSON.stringify({ version: 2, swaps: {} })
+			JSON.stringify({ version: 3, swaps: {} })
 		);
 		expect(() => new ReverseSwapStore(storage).restore()).to.throw(/version 1/);
 	});

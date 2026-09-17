@@ -8,10 +8,12 @@
  * records do say what this device paid and to whom. The reverse SWAP record
  * (swaps/store.ts) is different: it holds the claim private key and the
  * preimage, because a claim after a crash needs exactly those. A host that
- * runs swaps must treat the storage it hands roux as a wallet file:
- * encrypt it at rest, restrict its mode, back it up. beignet keeps its own
- * records in its encrypted wallet store; roux has no wallet of its own,
- * so the host chooses.
+ * runs swaps must therefore treat the storage it hands roux as a wallet
+ * file: encrypt it at rest, restrict its mode, back it up. beignet keeps
+ * its own records in its encrypted wallet store; roux has no wallet of its
+ * own, so the host chooses. A host whose wallet can derive keys instead
+ * passes `swaps.secrets` (swaps/secrets.ts) and the swap records stop
+ * being secret, though they still have to be durable.
  */
 
 import * as fs from 'fs';

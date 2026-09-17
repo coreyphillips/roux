@@ -133,22 +133,25 @@ describe('ReverseSwap lifecycle', function () {
 		const attempt = r.claim!.attempts[0];
 		expect(attempt.broadcastAt).to.equal(undefined);
 		expect(r.lastError).to.match(/refused/);
-		expect(stored(s, swap.swapIdHex).claim!.attempts[0].rawHex).to.equal(
-			attempt.rawHex
-		);
-		const tx = bitcoin.Transaction.fromHex(attempt.rawHex);
+		// The txid is persisted before the send; the bytes, which carry the
+		// preimage, wait until a broadcast has published it.
+		expect(attempt.rawHex).to.equal(undefined);
+		expect(stored(s, swap.swapIdHex).claim!.attempts[0]).to.deep.equal(attempt);
+		// Next tick: the same bytes go out, and are kept once they have.
+		await swap.tick();
+		expect(s.chain.broadcasts).to.deep.equal([attempt.txidHex]);
+		const sent = swap.record().claim!.attempts[0];
+		expect(sent.broadcastAt).to.be.a('number');
+		expect(swap.record().lastError).to.equal(undefined);
+		const tx = bitcoin.Transaction.fromHex(sent.rawHex!);
+		expect(tx.getId()).to.equal(attempt.txidHex);
 		expect(tx.outs[0].script.toString('hex')).to.equal(r.destinationScriptHex);
 		// The fee was sized from a probe build; a signature byte may differ.
-		expect(Number(attempt.feeSat)).to.be.within(
+		expect(Number(sent.feeSat)).to.be.within(
 			tx.virtualSize() * 3,
 			(tx.virtualSize() + 3) * 3
 		);
 		expect(tx.ins[0].witness[1].toString('hex')).to.equal(r.preimageHex);
-		// Next tick: the same bytes go out.
-		await swap.tick();
-		expect(s.chain.broadcasts).to.deep.equal([attempt.txidHex]);
-		expect(swap.record().claim!.attempts[0].broadcastAt).to.be.a('number');
-		expect(swap.record().lastError).to.equal(undefined);
 	});
 
 	it('marks CLAIMED at one confirmation and the payment completes with our preimage', async function () {
@@ -450,7 +453,7 @@ describe('ReverseSwap lifecycle', function () {
 			expect(s.reopen().reverse.get(b.swapIdHex)!.state).to.equal('EXPIRED');
 		});
 
-		it('FUNDED after a crash claims; CLAIM_BROADCAST re-sends the persisted bytes', async function () {
+		it('FUNDED after a crash claims; CLAIM_BROADCAST signs again when its bytes never went out', async function () {
 			const s = scene();
 			const swap = await started(s);
 			s.provider.fund(s.chain, swap.swapIdHex, { height: 1000 });
@@ -460,7 +463,12 @@ describe('ReverseSwap lifecycle', function () {
 			expect(attempt.broadcastAt).to.equal(undefined);
 			const report = await s.reopen().reverse.resume();
 			expect(report.resumed).to.have.length(1);
+			// The bytes went with the process that built them, so the claim is
+			// signed again: the same inputs and fee, so the same transaction.
 			expect(s.chain.broadcasts).to.deep.equal([attempt.txidHex]);
+			const latest = report.resumed[0].record().claim!.attempts.at(-1)!;
+			expect(latest.txidHex).to.equal(attempt.txidHex);
+			expect(latest.rawHex).to.not.equal(undefined);
 			// A FUNDED row (persisted before any attempt) builds the claim itself.
 			const doc = JSON.parse(
 				s.storage.loadWalletData(REVERSE_SWAP_STORAGE_KEY)!
@@ -500,7 +508,7 @@ describe('ReverseSwap lifecycle', function () {
 		s.provider.fund(s.chain, swap.swapIdHex, { height: 1000 });
 		await swap.tick();
 		const r = swap.record();
-		const claim = bitcoin.Transaction.fromHex(r.claim!.attempts[0].rawHex);
+		const claim = bitcoin.Transaction.fromHex(r.claim!.attempts[0].rawHex!);
 		const funding = s.chain.txs.get(r.funding!.txidHex)!.tx;
 		const preimage = swaps.extractSwapPreimage(claim, {
 			htlc: {

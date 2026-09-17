@@ -208,7 +208,7 @@ describe('swap secrets', function () {
 			await swap.tick();
 			expect(swap.state).to.equal('CLAIM_BROADCAST');
 			const claim = bitcoin.Transaction.fromHex(
-				swap.record().claim!.attempts[0].rawHex
+				swap.record().claim!.attempts[0].rawHex!
 			);
 			expect(claim.ins[0].witness[1].toString('hex')).to.equal(
 				preimage.toString('hex')
@@ -217,6 +217,30 @@ describe('swap secrets', function () {
 			s.chain.mine(1);
 			await swap.tick();
 			expect(swap.state).to.equal('CLAIMED');
+		});
+
+		it('keeps the claim bytes off the record until a broadcast publishes them', async function () {
+			const file = seedFile();
+			const s = scene(new FileSecretProvider(file));
+			const swap = await s.client.reverse.create(s.provider.id, {
+				amountSat: 100_000
+			});
+			const preimage = new FileSecretProvider(file).derivePreimage(
+				swap.record().secrets!.idHex
+			);
+			void swap.pay();
+			s.provider.fund(s.chain, swap.swapIdHex, { height: 1000 });
+			s.chain.failNextBroadcasts = 1;
+			await swap.tick();
+			// The claim is signed and its witness carries the preimage, but the
+			// broadcast failed: nothing disclosed it, so nothing wrote it down.
+			expect(swap.state).to.equal('CLAIM_BROADCAST');
+			expect(swap.record().claim!.attempts[0].rawHex).to.equal(undefined);
+			expect(rawReverse(s)).to.not.contain(preimage.toString('hex'));
+			// Out on the second try: now the bytes are a receipt, and kept.
+			await swap.tick();
+			expect(s.chain.broadcasts).to.have.length(1);
+			expect(rawReverse(s)).to.contain(preimage.toString('hex'));
 		});
 
 		it('resumes from the record when the same seam is there, and refuses it when it is not', async function () {
@@ -311,13 +335,32 @@ describe('swap secrets', function () {
 			await swap.tick();
 			expect(swap.state).to.equal('REFUND_BROADCAST');
 			const refund = bitcoin.Transaction.fromHex(
-				swap.record().refund!.attempts[0].rawHex
+				swap.record().refund!.attempts[0].rawHex!
 			);
 			const funding = swap.record().funding!;
 			expect(
 				Buffer.from(refund.ins[0].hash).reverse().toString('hex')
 			).to.equal(funding.txidHex);
 			expect(s.chain.broadcasts).to.deep.equal([refund.getId()]);
+		});
+
+		it('refuses to fund when the seed does not derive the refund key on the record', async function () {
+			const s = scene(new FileSecretProvider(seedFile()));
+			const swap = await s.client.submarine.create(s.provider.id, {
+				amountSat: 100_000
+			});
+			// Another seed under the same name: resume() cannot tell the two
+			// apart, so the refund key has to, before the coins go out.
+			const wrong = s.reopen(new FileSecretProvider(seedFile()));
+			const report = await wrong.submarine.resume({ fund: true });
+			expect(report.errors).to.have.length(0);
+			const err = await failure(wrong.submarine.get(swap.swapIdHex)!.fund());
+			expect(err.code).to.equal('secrets');
+			expect(err.message).to.match(/refund key/);
+			expect(s.funder.calls).to.have.length(0);
+			expect(
+				wrong.submarine.get(swap.swapIdHex)!.record().fundingAttempt
+			).to.equal(undefined);
 		});
 
 		it('refuses a record whose provider this client was not given, and a supplied refund key', async function () {
@@ -338,6 +381,22 @@ describe('swap secrets', function () {
 			);
 			expect(supplied.code).to.equal('policy');
 		});
+	});
+
+	it('versions the document 2 once a record names a provider, 1 while none does', async function () {
+		const version = (raw: string): number =>
+			(JSON.parse(raw) as { version: number }).version;
+		const plain = scene();
+		await plain.client.reverse.create(plain.provider.id, {
+			amountSat: 100_000
+		});
+		expect(version(rawReverse(plain))).to.equal(1);
+		// A roux from before the seam reads version 1 only. It has to refuse
+		// the document: a keyless record looks to it like one whose key went
+		// missing, and it would fund a swap it could never refund.
+		const s = scene(new FileSecretProvider(seedFile()));
+		await s.client.reverse.create(s.provider.id, { amountSat: 100_000 });
+		expect(version(rawReverse(s))).to.equal(2);
 	});
 
 	it('without the seam the records still hold the secrets', async function () {

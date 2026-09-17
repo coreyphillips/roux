@@ -508,7 +508,7 @@ describe("submarine swap: roux against beignet's real provider engine over Noise
 				10_000
 			);
 			const refund = bitcoin.Transaction.fromHex(
-				swap.record().refund!.attempts[0].rawHex
+				swap.record().refund!.attempts[0].rawHex!
 			);
 			expect(refund.locktime).to.equal(rec.refundHeight);
 			expect(refund.outs[0].script.toString('hex')).to.equal(

@@ -312,7 +312,12 @@ export function isTerminalReverseSwapState(state: ReverseSwapState): boolean {
 
 export interface IReverseSwapClaimAttempt {
 	txidHex: string;
-	rawHex: string;
+	/**
+	 * The signed transaction. A claim's witness carries the preimage, so it
+	 * is written only once a broadcast has published it; a refund's witness
+	 * holds no secret and is written when it is built.
+	 */
+	rawHex?: string;
 	feeSat: string;
 	feeRateSatPerVb: number;
 	builtAt: number;

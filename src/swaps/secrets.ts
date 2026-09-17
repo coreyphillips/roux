@@ -15,10 +15,12 @@
  * useless, and the check turns that into an error instead of a transaction
  * that pays nobody.
  *
- * One preimage still reaches the record either way: the one the node
- * reports on a settled payment, under `payment.preimageHex`. By then the
- * claim has disclosed it on chain, which is how the provider settled the
- * hold, so it is a receipt rather than a secret.
+ * A preimage still reaches the record twice, both times after it is
+ * public: under `payment.preimageHex`, which is what the node reports on a
+ * settled payment, and inside a claim attempt's `rawHex`, which is written
+ * only once a broadcast of those bytes has succeeded. By then the claim has
+ * disclosed the preimage, which is how the provider settles the hold, so
+ * both are receipts rather than secrets.
  *
  * `FileSecretProvider` is the implementation roux ships, because neither
  * `LndWallet` nor `ClnWallet` can hand out a scalar from the node's seed
@@ -152,7 +154,11 @@ export class FileSecretProvider implements ISwapSecretProvider {
 		return this.seed;
 	}
 
-	/** A seed anyone on the box can read is not a seed. Windows fakes the bits. */
+	/**
+	 * A seed anyone on the box can read is not a seed. The check is POSIX
+	 * only: Windows fakes the mode bits, and what governs there is an ACL
+	 * this cannot see, so the host has to restrict the file itself.
+	 */
 	private assertPrivate(): void {
 		if (process.platform === 'win32') return;
 		const mode = fs.statSync(this.filePath).mode & 0o777;

@@ -228,6 +228,11 @@ export class SubmarineSwap {
 				'already_funded'
 			);
 		}
+		// The refund key before the coins. A provider id is a name, not a
+		// fingerprint of the seed behind it, so a second seed under the same
+		// name passes resume()'s check; funding first would leave an output
+		// only the provider could ever spend.
+		await submarineRefundKey(this.rec, this.deps.secrets);
 		const tip = await this.deps.chain.currentHeight();
 		if (tip >= this.rec.refundHeight - this.deps.policy.claimSafetyBlocks) {
 			throw new SwapError(
@@ -881,7 +886,9 @@ export class SubmarineSwap {
 		const attempts = this.rec.refund!.attempts;
 		const latest = attempts[attempts.length - 1];
 		try {
-			await this.deps.chain.broadcast(latest.rawHex);
+			// A refund witness holds no secret, so its bytes are on the record
+			// from the moment it is built.
+			await this.deps.chain.broadcast(latest.rawHex!);
 			const updated = attempts.map((a, i) =>
 				i === attempts.length - 1 && a.broadcastAt === undefined
 					? { ...a, broadcastAt: Date.now(), broadcastHeight: tip }

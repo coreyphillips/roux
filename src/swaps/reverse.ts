@@ -80,6 +80,8 @@ export class ReverseSwap {
 	private running: Promise<IReverseSwapRecord> | null = null;
 	private ticking: Promise<void> | null = null;
 	private paying: Promise<ISwapPaymentStatus> | null = null;
+	/** The signed claim, held here until a broadcast publishes its preimage. */
+	private builtClaim: { txidHex: string; rawHex: string } | null = null;
 
 	constructor(
 		record: IReverseSwapRecord,
@@ -671,12 +673,14 @@ export class ReverseSwap {
 		}
 		const attempt = {
 			txidHex: built.tx.getId(),
-			rawHex: built.tx.toHex(),
 			feeSat: built.feeSat.toString(),
 			feeRateSatPerVb: built.feeRateSatPerVb,
 			builtAt: Date.now()
 		};
-		// Persisted BEFORE broadcast: a crash after the send still knows the bytes.
+		// Persisted BEFORE broadcast: a crash after the send still knows the
+		// txid, which is how a spender is recognised as ours. The bytes hold
+		// the preimage and wait in memory until a broadcast publishes it.
+		this.builtClaim = { txidHex: attempt.txidHex, rawHex: built.tx.toHex() };
 		this.persist({
 			state: 'CLAIM_BROADCAST',
 			claim: { attempts: [...(this.rec.claim?.attempts ?? []), attempt] }
@@ -685,14 +689,29 @@ export class ReverseSwap {
 		return attempt.txidHex;
 	}
 
+	/** The latest attempt's bytes: on the record once public, in memory before. */
+	private latestClaimHex(): string | null {
+		const attempts = this.rec.claim?.attempts ?? [];
+		const latest = attempts[attempts.length - 1];
+		if (!latest) return null;
+		if (latest.rawHex) return latest.rawHex;
+		return this.builtClaim?.txidHex === latest.txidHex
+			? this.builtClaim.rawHex
+			: null;
+	}
+
 	private async broadcastLatest(tip: number): Promise<void> {
 		const attempts = this.rec.claim!.attempts;
 		const latest = attempts[attempts.length - 1];
+		const rawHex = this.latestClaimHex();
+		// An attempt that never reached a node left its bytes with the process
+		// that built them; followClaim signs the claim again instead.
+		if (!rawHex) return;
 		try {
-			await this.deps.chain.broadcast(latest.rawHex);
+			await this.deps.chain.broadcast(rawHex);
 			const updated = attempts.map((a, i) =>
 				i === attempts.length - 1 && a.broadcastAt === undefined
-					? { ...a, broadcastAt: Date.now(), broadcastHeight: tip }
+					? { ...a, rawHex, broadcastAt: Date.now(), broadcastHeight: tip }
 					: a
 			);
 			this.persist({
@@ -742,7 +761,8 @@ export class ReverseSwap {
 		const latest = attempts[attempts.length - 1];
 		if (!latest) return;
 		if (latest.broadcastAt === undefined) {
-			await this.broadcastLatest(tip);
+			if (this.latestClaimHex()) await this.broadcastLatest(tip);
+			else await this.claim();
 			return;
 		}
 		const due =
@@ -810,11 +830,11 @@ export class ReverseSwap {
 		}
 		const attempt = {
 			txidHex: built.tx.getId(),
-			rawHex: built.tx.toHex(),
 			feeSat: built.feeSat.toString(),
 			feeRateSatPerVb: built.feeRateSatPerVb,
 			builtAt: Date.now()
 		};
+		this.builtClaim = { txidHex: attempt.txidHex, rawHex: built.tx.toHex() };
 		this.persist({
 			claim: { ...this.rec.claim!, attempts: [...attempts, attempt] }
 		});

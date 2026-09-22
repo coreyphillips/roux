@@ -22,6 +22,7 @@
  */
 
 import * as grpc from '@grpc/grpc-js';
+import { swaps as beignetSwaps } from 'beignet/lightning';
 import { BeignetClient } from '../client';
 import { EphemeralStorageError } from '../storage';
 import { RouxLog, RouxNetwork, noopLog } from '../types';
@@ -38,7 +39,7 @@ import {
 	isTerminalReverseSwapState,
 	isTerminalSubmarineSwapState
 } from '../swaps/types';
-import { reverseOnchainFor, submarineOnchainFor } from './amounts';
+import { FeeQuote, reverseOnchainFor, submarineOnchainFor } from './amounts';
 import {
 	isPendingReverse,
 	isPendingSubmarine,
@@ -222,15 +223,19 @@ export class BoltzService {
 		}
 	}
 
-	private async quote(
+	private async rawQuote(
 		direction: Direction,
 		amountSat: bigint
 	): Promise<ISwapQuoteResult> {
 		await this.options.ensureProvider?.();
-		const q = await this.swaps.quote(this.options.provider, {
-			direction,
-			amountSat
-		});
+		return this.swaps.quote(this.options.provider, { direction, amountSat });
+	}
+
+	private async quote(
+		direction: Direction,
+		amountSat: bigint
+	): Promise<ISwapQuoteResult> {
+		const q = await this.rawQuote(direction, amountSat);
 		if (!q.accepted) {
 			throw new RpcError(
 				grpc.status.FAILED_PRECONDITION,
@@ -240,23 +245,106 @@ export class BoltzService {
 		return q;
 	}
 
-	private feeQuote(direction: Direction): (onchain: bigint) => Promise<bigint> {
-		return async (onchain) =>
-			(await this.quote(direction, onchain)).totalFeeSat;
+	/**
+	 * The provider's fee as a function of the on-chain amount, for the
+	 * amount searches. A probe outside the provider's limits is not a
+	 * question it answers (the submarine search starts below the minimum by
+	 * construction, and the reverse one above the maximum), so a probe is
+	 * clamped into the limits; the amount the search settles on is checked
+	 * against them afterwards.
+	 */
+	private feeProbe(direction: Direction, limits: ISwapQuoteResult): FeeQuote {
+		return async (onchain) => {
+			let probe = onchain;
+			if (limits.minSwapSat > 0n && probe < limits.minSwapSat) {
+				probe = limits.minSwapSat;
+			}
+			if (limits.maxSwapSat > 0n && probe > limits.maxSwapSat) {
+				probe = limits.maxSwapSat;
+			}
+			return (await this.quote(direction, probe)).totalFeeSat;
+		};
+	}
+
+	/** The on-chain amount for a Lightning amount, inside the limits. */
+	private async onchainFor(
+		direction: Direction,
+		invoiceSat: bigint,
+		limits?: ISwapQuoteResult
+	): Promise<bigint> {
+		const terms = limits ?? (await this.quote(direction, 0n));
+		const probe = this.feeProbe(direction, terms);
+		let onchain: bigint;
+		try {
+			onchain =
+				direction === 'submarine'
+					? await submarineOnchainFor(
+							invoiceSat,
+							probe,
+							this.swaps.policy.submarineFeeSlackSat
+					  )
+					: await reverseOnchainFor(invoiceSat, probe);
+		} catch (err) {
+			if (err instanceof RpcError) throw err;
+			throw new RpcError(
+				grpc.status.INVALID_ARGUMENT,
+				err instanceof Error ? err.message : String(err)
+			);
+		}
+		this.assertWithinLimits(onchain, terms);
+		return onchain;
+	}
+
+	private assertWithinLimits(
+		onchainSat: bigint,
+		limits: ISwapQuoteResult
+	): void {
+		const outside =
+			limits.minSwapSat > 0n && onchainSat < limits.minSwapSat
+				? `below the provider's minimum ${limits.minSwapSat}`
+				: limits.maxSwapSat > 0n && onchainSat > limits.maxSwapSat
+				? `above the provider's maximum ${limits.maxSwapSat}`
+				: null;
+		if (outside) {
+			throw new RpcError(
+				grpc.status.INVALID_ARGUMENT,
+				`the swap's on-chain amount ${onchainSat} is ${outside}`
+			);
+		}
+	}
+
+	/** What the provider charges at an amount, priced from its terms when it declines that end. */
+	private async feeAt(
+		direction: Direction,
+		amountSat: bigint
+	): Promise<{ totalFeeSat: bigint; minerFeeSat: bigint }> {
+		const q = await this.rawQuote(direction, amountSat);
+		if (q.accepted) return q;
+		return {
+			totalFeeSat: beignetSwaps.reverseSwapFee(amountSat, {
+				flatFeeSat: q.flatFeeSat,
+				feePpm: q.feePpm,
+				minerFeeSat: q.minerFeeSat
+			}),
+			minerFeeSat: q.minerFeeSat
+		};
 	}
 
 	private async pairInfo(direction: Direction): Promise<PairInfo> {
 		const limits = await this.quote(direction, 0n);
-		const priced = await this.quote(
-			direction,
-			limits.minSwapSat > 0n ? limits.minSwapSat : 1n
-		);
-		return toPairInfo(
-			direction,
+		const min = limits.minSwapSat > 0n ? limits.minSwapSat : 1n;
+		const max = limits.maxSwapSat > min ? limits.maxSwapSat : min;
+		const [atMin, atMax] = await Promise.all([
+			this.feeAt(direction, min),
+			this.feeAt(direction, max)
+		]);
+		return toPairInfo(direction, {
 			limits,
-			priced,
-			this.swaps.policy.submarineFeeSlackSat
-		);
+			feeAtMinSat: atMin.totalFeeSat,
+			feeAtMaxSat: atMax.totalFeeSat,
+			minerFeeSat: atMin.minerFeeSat,
+			slackSat: this.swaps.policy.submarineFeeSlackSat
+		});
 	}
 
 	private checkAcceptedPair(
@@ -411,11 +499,7 @@ export class BoltzService {
 			// Send on chain, receive the invoice.
 			const onchain = send
 				? BigInt(send)
-				: await submarineOnchainFor(
-						BigInt(receive!),
-						this.feeQuote('submarine'),
-						slack
-				  );
+				: await this.onchainFor('submarine', BigInt(receive!));
 			q = await this.quote('submarine', onchain);
 			sendSat = onchain;
 			receiveSat = onchain - q.totalFeeSat - slack;
@@ -423,7 +507,7 @@ export class BoltzService {
 			// Pay the invoice, receive on chain.
 			const onchain = receive
 				? BigInt(receive)
-				: await reverseOnchainFor(BigInt(send!), this.feeQuote('reverse'));
+				: await this.onchainFor('reverse', BigInt(send!));
 			q = await this.quote('reverse', onchain);
 			sendSat = onchain + q.totalFeeSat;
 			receiveSat = onchain;
@@ -687,11 +771,7 @@ export class BoltzService {
 				await this.pairInfo('submarine')
 			);
 		}
-		const onchain = await submarineOnchainFor(
-			amountSat,
-			this.feeQuote('submarine'),
-			this.swaps.policy.submarineFeeSlackSat
-		);
+		const onchain = await this.onchainFor('submarine', amountSat);
 		const swap = await this.swaps.submarine.create(this.options.provider, {
 			amountSat: onchain,
 			invoice,
@@ -820,10 +900,7 @@ export class BoltzService {
 			this.checkAcceptedPair(req.accepted_pair, await this.pairInfo('reverse'));
 		}
 		const invoiceSat = BigInt(req.amount);
-		const onchain = await reverseOnchainFor(
-			invoiceSat,
-			this.feeQuote('reverse')
-		);
+		const onchain = await this.onchainFor('reverse', invoiceSat);
 		const swap = await this.swaps.reverse.create(this.options.provider, {
 			amountSat: onchain,
 			destinationScript: destination

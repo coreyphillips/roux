@@ -13,6 +13,7 @@ import path from 'path';
 import * as grpc from '@grpc/grpc-js';
 import {
 	RpcAuth,
+	lndMacaroonHex,
 	loadBoltzDaemonConfig,
 	mintMacaroon,
 	serverCredentials
@@ -86,7 +87,7 @@ maxClaimFeeSat = 5000
 		expect(c.lnd).to.deep.equal({
 			host: '10.0.0.5',
 			restPort: 8081,
-			macaroonPath: path.join(
+			macaroon: path.join(
 				h,
 				'.lnd',
 				'data',
@@ -175,6 +176,40 @@ port = 3011
 		expect(() => loadBoltzDaemonConfig([], h)).to.throw(
 			/unknown \[Roux.Policy\] key/
 		);
+	});
+});
+
+describe('roux-boltzd LND macaroon', function () {
+	it('takes hex or a path, as boltzd does, and keeps the credential out of errors', function () {
+		const h = home();
+		const macaroon = mintMacaroon();
+		const hex = macaroon.toString('hex');
+		write(path.join(h, 'admin.macaroon'), macaroon);
+		expect(lndMacaroonHex(path.join(h, 'admin.macaroon'))).to.equal(hex);
+		// An existing boltzd config can hold the credential inline.
+		expect(lndMacaroonHex(hex.toUpperCase())).to.equal(hex);
+		expect(lndMacaroonHex(` ${hex}\n`)).to.equal(hex);
+		// Nothing that looks like a credential is ever quoted back.
+		let leaked = '';
+		try {
+			lndMacaroonHex(`${hex}a`);
+		} catch (err) {
+			leaked = (err as Error).message;
+		}
+		expect(leaked).to.match(/odd number of characters/);
+		expect(leaked).to.not.contain(hex.slice(0, 32));
+		const missing = path.join(h, 'nope.macaroon');
+		expect(() => lndMacaroonHex(missing)).to.throw(/nope.macaroon: ENOENT/);
+	});
+
+	it('is read from the config, hex or path alike', function () {
+		const h = home();
+		const hex = mintMacaroon().toString('hex');
+		write(
+			path.join(h, '.boltz', 'boltz.toml'),
+			`network = "regtest"\n[LND]\nmacaroon = "${hex}"\n[Roux]\nprovider = "${PROVIDER}"\n[Roux.Bitcoind]\nuser = "u"\npass = "p"\n`
+		);
+		expect(loadBoltzDaemonConfig([], h).lnd!.macaroon).to.equal(hex);
 	});
 });
 

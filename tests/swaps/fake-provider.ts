@@ -37,6 +37,9 @@ export interface IFakeProviderKnobs {
 	resolutionSafetyBlocks?: number;
 	/** Funding depth before it pays (ack.fundingConfirmations). */
 	fundingConfirmations?: number;
+	/** The limits it quotes, and refuses an amount outside (defaults 10k, 1M). */
+	minSwapSat?: bigint;
+	maxSwapSat?: bigint;
 }
 
 export interface IFakeSwap {
@@ -80,6 +83,14 @@ export class FakeProvider {
 		return this.link.id;
 	}
 
+	get minSwapSat(): bigint {
+		return this.knobs.minSwapSat ?? 10_000n;
+	}
+
+	get maxSwapSat(): bigint {
+		return this.knobs.maxSwapSat ?? 1_000_000n;
+	}
+
 	stop(): void {
 		this.off();
 	}
@@ -105,19 +116,30 @@ export class FakeProvider {
 			const req = swaps.decodeSwapQuoteRequest(payload);
 			const submarine = req.direction === swaps.SwapWireDirection.SUBMARINE;
 			const { total, miner } = this.fee(req.amountSat);
+			// An amount outside the limits is refused, as the real engines
+			// refuse it; amount 0 asks for the limits themselves.
+			const outOfRange =
+				req.amountSat === 0n
+					? undefined
+					: req.amountSat < this.minSwapSat
+					? swaps.SwapRefusalReason.AMOUNT_BELOW_MIN
+					: req.amountSat > this.maxSwapSat
+					? swaps.SwapRefusalReason.AMOUNT_ABOVE_MAX
+					: undefined;
+			const refuse = this.knobs.refuse ?? outOfRange;
 			this.link.sendCustomMessage(
 				peer,
 				message.BeignetCustomSubtype.SWAP_QUOTE,
 				swaps.encodeSwapQuote({
 					requestId: req.requestId,
 					direction: req.direction,
-					accepted: this.knobs.refuse === undefined,
-					reason: this.knobs.refuse ?? swaps.SwapRefusalReason.NONE,
-					reasonText: this.knobs.refuse !== undefined ? 'no' : undefined,
+					accepted: refuse === undefined,
+					reason: refuse ?? swaps.SwapRefusalReason.NONE,
+					reasonText: refuse !== undefined ? 'no' : undefined,
 					flatFeeSat: this.knobs.flatFeeSat ?? 100n,
 					feePpm: this.knobs.feePpm ?? 1_000,
-					minSwapSat: 10_000n,
-					maxSwapSat: 1_000_000n,
+					minSwapSat: this.minSwapSat,
+					maxSwapSat: this.maxSwapSat,
 					refundDeltaBlocks: this.knobs.refundDelta ?? 144,
 					fundingConfirmations: this.knobs.fundingConfirmations ?? 1,
 					invoiceExpirySeconds: submarine ? 600 : 1800,

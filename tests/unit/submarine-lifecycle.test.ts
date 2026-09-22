@@ -288,6 +288,67 @@ describe('SubmarineSwap lifecycle', function () {
 		);
 	});
 
+	it('a refund already building its bytes finishes first: the setter waits, then refuses', async function () {
+		const s = scene();
+		const swap = await confirmed(s);
+		const rec0 = swap.record();
+		mineTo(s, rec0.refundHeight);
+		// Hold the refund inside the fee estimate, after it read the record.
+		let release: () => void = () => undefined;
+		s.chain.feeGate = () =>
+			new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		const refunding = swap.refund();
+		await new Promise((r) => setTimeout(r, 10));
+		const elsewhere = bitcoin.payments.p2wpkh({
+			hash: Buffer.alloc(20, 7)
+		}).output!;
+		let settled = false;
+		const setting = swap
+			.setRefundDestination(elsewhere)
+			.then(
+				() => 'set',
+				(err: SwapError) => err.code
+			)
+			.finally(() => {
+				settled = true;
+			});
+		await new Promise((r) => setTimeout(r, 10));
+		expect(settled, 'the setter waits for the refund in flight').to.equal(
+			false
+		);
+		release();
+		await refunding;
+		expect(await setting).to.equal('state');
+		// The record and the broadcast transaction agree.
+		const rec = swap.record();
+		expect(rec.refundDestinationScriptHex).to.equal(
+			rec0.refundDestinationScriptHex
+		);
+		const tx = bitcoin.Transaction.fromHex(rec.refund!.attempts[0].rawHex);
+		expect(tx.outs[0].script.toString('hex')).to.equal(
+			rec0.refundDestinationScriptHex
+		);
+	});
+
+	it('a second refund while one is in flight joins it instead of competing', async function () {
+		const s = scene();
+		const swap = await confirmed(s);
+		mineTo(s, swap.record().refundHeight);
+		let release: () => void = () => undefined;
+		s.chain.feeGate = () =>
+			new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		const first = swap.refund();
+		const second = swap.refund();
+		await new Promise((r) => setTimeout(r, 10));
+		release();
+		expect(await first).to.equal(await second);
+		expect(swap.record().refund!.attempts).to.have.length(1);
+	});
+
 	it('never refunds while the invoice holds an HTLC; refunds once released; settles if it settles', async function () {
 		const s = scene();
 		const swap = await confirmed(s);

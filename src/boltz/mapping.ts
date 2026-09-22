@@ -313,42 +313,51 @@ export function toAnySwapInfo(info: SwapInfo | ReverseSwapInfo): AnySwapInfo {
 
 // ─────────────── pairs ───────────────
 
+export interface IPairTerms {
+	/** The amount-0 quote: the fee terms, the limits and the window. */
+	limits: ISwapQuoteResult;
+	/** What the provider actually charges at its minimum and its maximum. */
+	feeAtMinSat: bigint;
+	feeAtMaxSat: bigint;
+	/** The miner fee it quoted with those. */
+	minerFeeSat: bigint;
+	/** roux's invoice slack, which a submarine swap also gives up. */
+	slackSat: bigint;
+}
+
 /**
  * A provider's terms as a boltz pair. Boltz prices a swap as a percentage
- * plus miner fees; the provider's flat fee (and, for a submarine swap,
- * roux's invoice slack) has no slot of its own, so it rides in
- * `miner_fees`, which keeps boltzcli's estimate (amount x percentage +
- * miner fees) equal to what the swap costs. Limits are Boltz's: on the
- * invoice amount, converted from the provider's on-chain limits.
- *
- * `limits` answers an amount-0 quote (limits only); `priced` a quote at the
- * provider's minimum, which carries the miner fee.
+ * plus miner fees; the provider's flat fee, roux's invoice slack and the
+ * routing budget a submarine provider charges on the net amount have no
+ * slot of their own, so they ride in `miner_fees`, measured at the
+ * provider's minimum. Limits are Boltz's, on the invoice, and come from
+ * what the provider charges at each end rather than from a fee formula
+ * repeated here: the submarine routing budget is not in that formula.
  */
 export function toPairInfo(
 	direction: 'submarine' | 'reverse',
-	limits: ISwapQuoteResult,
-	priced: ISwapQuoteResult,
-	submarineSlackSat: bigint
+	terms: IPairTerms
 ): PairInfo {
-	const terms = {
-		flatFeeSat: limits.flatFeeSat,
-		feePpm: limits.feePpm,
-		minerFeeSat: priced.minerFeeSat
-	};
-	const slack = direction === 'submarine' ? submarineSlackSat : 0n;
-	const invoiceFor = (onchain: bigint): bigint => {
-		const fee = swaps.reverseSwapFee(onchain, terms) + slack;
+	const { limits } = terms;
+	const slack = direction === 'submarine' ? terms.slackSat : 0n;
+	const invoiceFor = (onchain: bigint, fee: bigint): bigint => {
 		if (direction === 'reverse') return onchain + fee;
-		return onchain > fee ? onchain - fee : 0n;
+		return onchain > fee + slack ? onchain - fee - slack : 0n;
 	};
+	// beignet rounds the proportional part up (swaps.reverseSwapFee).
+	const proportionalAtMin =
+		(limits.minSwapSat * BigInt(limits.feePpm) + 999_999n) / 1_000_000n;
+	const nonProportional = terms.feeAtMinSat + slack - proportionalAtMin;
 	const hash = crypto
 		.createHash('sha256')
 		.update(
 			JSON.stringify([
 				direction,
-				terms.flatFeeSat.toString(),
-				terms.feePpm,
+				limits.flatFeeSat.toString(),
+				limits.feePpm,
 				terms.minerFeeSat.toString(),
+				terms.feeAtMinSat.toString(),
+				terms.feeAtMaxSat.toString(),
 				limits.minSwapSat.toString(),
 				limits.maxSwapSat.toString(),
 				limits.refundDeltaBlocks,
@@ -360,11 +369,11 @@ export function toPairInfo(
 		pair: BTC_PAIR,
 		fees: {
 			percentage: limits.feePpm / 10_000,
-			miner_fees: Number(terms.flatFeeSat + terms.minerFeeSat + slack)
+			miner_fees: Number(nonProportional > 0n ? nonProportional : 0n)
 		},
 		limits: {
-			minimal: Number(invoiceFor(limits.minSwapSat)),
-			maximal: Number(invoiceFor(limits.maxSwapSat)),
+			minimal: Number(invoiceFor(limits.minSwapSat, terms.feeAtMinSat)),
+			maximal: Number(invoiceFor(limits.maxSwapSat, terms.feeAtMaxSat)),
 			maximal_zero_conf_amount: 0
 		},
 		hash

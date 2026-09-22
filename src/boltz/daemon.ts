@@ -24,6 +24,7 @@ import { BoltzService } from './service';
 import { startBoltzServer } from './server';
 
 const RECONNECT_MS = 60_000;
+const RESUME_RETRY_MS = 30_000;
 
 export interface IBoltzDaemonOptions {
 	log?: RouxLog;
@@ -32,6 +33,8 @@ export interface IBoltzDaemonOptions {
 	client?: BeignetClient;
 	/** Replace the chain source (tests); Bitcoin Core from the config otherwise. */
 	chain?: ISwapChain;
+	/** How long between retries of a resume that could not finish (default 30s). */
+	resumeRetryMs?: number;
 }
 
 export interface IBoltzDaemon {
@@ -58,6 +61,33 @@ export function packageVersion(): string {
 	}
 }
 
+/**
+ * `[LND] macaroon` as boltzd reads it: the hex of a macaroon, or a path to
+ * one. A credential never reaches an error message, so a hex value that
+ * cannot be a macaroon is reported without quoting it, and only a value
+ * that is not hex at all can appear as the path it is.
+ */
+export function lndMacaroonHex(value: string): string {
+	const compact = value.trim();
+	if (/^[0-9a-fA-F]+$/.test(compact) && compact.length >= 32) {
+		if (compact.length % 2 !== 0) {
+			throw new Error(
+				'the [LND] macaroon looks like hex but has an odd number of characters'
+			);
+		}
+		return compact.toLowerCase();
+	}
+	try {
+		return fs.readFileSync(compact).toString('hex');
+	} catch (err) {
+		throw new Error(
+			`could not read the LND macaroon at ${compact}: ${
+				(err as NodeJS.ErrnoException).code ?? (err as Error).message
+			}. Set [LND] macaroon to a readable file or to its hex, or set [LND] datadir and network`
+		);
+	}
+}
+
 function readIfExists(file: string | undefined): Buffer | undefined {
 	return file && fs.existsSync(file) ? fs.readFileSync(file) : undefined;
 }
@@ -79,15 +109,10 @@ export function buildDaemonClient(
 	const storage = new FileStorage(config.storePath);
 	if (config.node === 'lnd') {
 		const lnd = config.lnd!;
-		if (!fs.existsSync(lnd.macaroonPath)) {
-			throw new Error(
-				`no LND macaroon at ${lnd.macaroonPath}: set [LND] macaroon, or [LND] datadir and network`
-			);
-		}
 		return createLndClient({
 			host: lnd.host,
 			port: lnd.restPort,
-			macaroonHex: fs.readFileSync(lnd.macaroonPath).toString('hex'),
+			macaroonHex: lndMacaroonHex(lnd.macaroon),
 			network: config.network,
 			...trust(lnd.host, readIfExists(lnd.certificatePath)),
 			storage,
@@ -155,19 +180,55 @@ export async function startBoltzDaemon(
 	const timer = setInterval(reconnect, RECONNECT_MS);
 	timer.unref?.();
 
-	// Every unresolved swap continues from its record, provider or not.
-	const [reverse, submarine] = await Promise.all([
-		client.swaps.reverse.resume({ run: true }),
-		client.swaps.submarine.resume({ run: true })
-	]);
-	log('boltz_swaps_resumed', {
-		reverse: reverse.resumed.length,
-		submarine: submarine.resumed.length,
-		reverseNeedsPayment: reverse.needsPayment.map((s) => s.swapIdHex),
-		submarineNeedsFunding: submarine.needsFunding.map((s) => s.swapIdHex),
-		submarineFundingUnknown: submarine.fundingUnknown.map((s) => s.swapIdHex),
-		errors: [...reverse.errors, ...submarine.errors]
-	});
+	// Every unresolved swap continues from its record, provider or not. A
+	// record whose pass failed (the chain or the node down while the daemon
+	// started) is left with nothing driving its claim, fee bump or refund,
+	// so the pass repeats until every one of them resumed. Repeating is
+	// safe: a swap already running keeps its loop, and nothing is paid or
+	// funded by a resume that was not asked to.
+	const resumeSwaps = async (): Promise<number> => {
+		const [reverse, submarine] = await Promise.all([
+			client.swaps.reverse.resume({ run: true }),
+			client.swaps.submarine.resume({ run: true })
+		]);
+		const errors = [...reverse.errors, ...submarine.errors];
+		log('boltz_swaps_resumed', {
+			reverse: reverse.resumed.length,
+			submarine: submarine.resumed.length,
+			reverseNeedsPayment: reverse.needsPayment.map((s) => s.swapIdHex),
+			submarineNeedsFunding: submarine.needsFunding.map((s) => s.swapIdHex),
+			submarineFundingUnknown: submarine.fundingUnknown.map((s) => s.swapIdHex),
+			errors
+		});
+		return errors.length;
+	};
+	let resumeTimer: NodeJS.Timeout | null = null;
+	const attemptResume = async (): Promise<void> => {
+		let errors: number;
+		try {
+			errors = await resumeSwaps();
+		} catch (err) {
+			log('boltz_swaps_resume_failed', {
+				error: err instanceof Error ? err.message : String(err)
+			});
+			errors = 1;
+		}
+		if (errors === 0) {
+			if (resumeTimer) {
+				clearInterval(resumeTimer);
+				resumeTimer = null;
+			}
+			return;
+		}
+		if (!resumeTimer) {
+			resumeTimer = setInterval(
+				() => void attemptResume(),
+				options.resumeRetryMs ?? RESUME_RETRY_MS
+			);
+			resumeTimer.unref?.();
+		}
+	};
+	await attemptResume();
 
 	const auth = new RpcAuth({
 		noMacaroons: config.rpc.noMacaroons,
@@ -213,6 +274,7 @@ export async function startBoltzDaemon(
 		});
 	} catch (err) {
 		clearInterval(timer);
+		if (resumeTimer) clearInterval(resumeTimer);
 		await client.close();
 		throw err;
 	}
@@ -228,6 +290,7 @@ export async function startBoltzDaemon(
 			if (!closing) {
 				closing = (async (): Promise<void> => {
 					clearInterval(timer);
+					if (resumeTimer) clearInterval(resumeTimer);
 					await server.close();
 					await client.close();
 				})();

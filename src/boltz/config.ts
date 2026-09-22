@@ -5,6 +5,8 @@
  * never needed. Keys match case-insensitively, as boltzd's TOML decoder
  * matches them; CLI flags use boltzd's names and win over the file.
  *
+ * `[LND] macaroon` is hex or a file path, as boltzd takes it.
+ *
  * From boltzd's file: `network`, `node`, `[RPC]` (host, port, tlsCert,
  * tlsKey, noTls, noMacaroons, adminMacaroonPath, readOnlyMacaroonPath,
  * password), `[LND]` (host, datadir, macaroon, certificate) and
@@ -64,7 +66,8 @@ export interface IBoltzDaemonConfig {
 	lnd?: {
 		host: string;
 		restPort: number;
-		macaroonPath: string;
+		/** Hex, or a path to a macaroon file: boltzd takes either. */
+		macaroon: string;
 		certificatePath?: string;
 	};
 	cln?: {
@@ -310,7 +313,7 @@ export function loadBoltzDaemonConfig(
 		lnd = {
 			host: str(rouxLnd, 'restHost') ?? str(lndT, 'host') ?? '127.0.0.1',
 			restPort: num(rouxLnd, 'restPort') ?? 8080,
-			macaroonPath: x(
+			macaroon: x(
 				str(lndT, 'macaroon') ??
 					path.join(
 						lndDir,

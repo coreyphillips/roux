@@ -285,7 +285,7 @@ describe('roux-boltzd mapping', function () {
 	});
 
 	it('prices a pair as Boltz does: percentage plus miner fees, limits on the invoice', function () {
-		const quote = (over: Partial<ISwapQuoteResult>): ISwapQuoteResult => ({
+		const limits: ISwapQuoteResult = {
 			direction: 'submarine',
 			accepted: true,
 			flatFeeSat: 100n,
@@ -298,27 +298,61 @@ describe('roux-boltzd mapping', function () {
 			totalFeeSat: 0n,
 			minerFeeSat: 0n,
 			invoiceAmountMsat: 0n,
-			withinPolicy: true,
-			...over
-		});
-		const limits = quote({});
-		const priced = quote({ minerFeeSat: 400n });
-		const sub = toPairInfo('submarine', limits, priced, 100n);
+			withinPolicy: true
+		};
+		// flat 100 + 1000 ppm + 400 miner, as the fake provider charges.
+		const terms = {
+			limits,
+			feeAtMinSat: 510n,
+			feeAtMaxSat: 1_500n,
+			minerFeeSat: 400n,
+			slackSat: 100n
+		};
+		const sub = toPairInfo('submarine', terms);
 		expect(sub.fees.percentage).to.equal(0.1);
-		expect(sub.fees.miner_fees).to.equal(100 + 400 + 100);
-		// 10 000 on chain, minus 100 + 10 + 400 + 100 slack.
-		expect(sub.limits.minimal).to.equal(10_000 - 610);
-		const rev = toPairInfo('reverse', limits, priced, 100n);
+		// Everything that is not the percentage, measured at the minimum.
+		expect(sub.fees.miner_fees).to.equal(510 - 10 + 100);
+		expect(sub.limits.minimal).to.equal(10_000 - 510 - 100);
+		expect(sub.limits.maximal).to.equal(1_000_000 - 1_500 - 100);
+		const rev = toPairInfo('reverse', terms);
 		expect(rev.fees.miner_fees).to.equal(500);
-		expect(rev.limits.minimal).to.equal(10_000 + 510);
-		expect(rev.limits.maximal).to.equal(1_000_000 + 1_500);
+		expect(rev.limits.minimal).to.equal(10_510);
+		expect(rev.limits.maximal).to.equal(1_001_500);
 		// Same terms, same hash; a moved fee is a new hash.
-		expect(toPairInfo('submarine', limits, priced, 100n).hash).to.equal(
-			sub.hash
-		);
+		expect(toPairInfo('submarine', terms).hash).to.equal(sub.hash);
 		expect(
-			toPairInfo('submarine', limits, quote({ minerFeeSat: 401n }), 100n).hash
+			toPairInfo('submarine', { ...terms, feeAtMinSat: 511n }).hash
 		).to.not.equal(sub.hash);
 		expect(rev.hash).to.not.equal(sub.hash);
+	});
+
+	it('takes the provider at its word, including a fee no local formula knows', function () {
+		// beignet's submarine engine also charges a routing budget on the net
+		// amount, which is in its quote and in no fee formula here.
+		const limits: ISwapQuoteResult = {
+			direction: 'submarine',
+			accepted: true,
+			flatFeeSat: 50n,
+			feePpm: 2_000,
+			minSwapSat: 10_000n,
+			maxSwapSat: 1_000_000n,
+			refundDeltaBlocks: 200,
+			fundingConfirmations: 1,
+			invoiceExpirySeconds: 60,
+			totalFeeSat: 0n,
+			minerFeeSat: 0n,
+			invoiceAmountMsat: 0n,
+			withinPolicy: true
+		};
+		// 50 flat + 20 ppm + 300 miner + 10 routing at the 10 000 sat minimum.
+		const sub = toPairInfo('submarine', {
+			limits,
+			feeAtMinSat: 380n,
+			feeAtMaxSat: 3_300n,
+			minerFeeSat: 300n,
+			slackSat: 100n
+		});
+		expect(sub.limits.minimal).to.equal(9_520);
+		expect(sub.fees.miner_fees).to.equal(380 - 20 + 100);
 	});
 });

@@ -17,7 +17,8 @@ import {
 import type {
 	CreateSwapResponse,
 	GetSwapInfoResponse,
-	GetSwapQuoteResponse
+	GetSwapQuoteResponse,
+	PairInfo
 } from '../../src/boltz';
 import { waitFor } from '../helpers';
 import {
@@ -101,6 +102,66 @@ describe("roux-boltzd against beignet's real submarine engine over Noise TCP", f
 			expect(info.swap!.service_fee! + info.swap!.onchain_fee!).to.equal(
 				created.expected_amount - 99_000
 			);
+		} finally {
+			rpc.close();
+			await server.close(200);
+			await teardown(s);
+		}
+	});
+
+	it('advertises limits the engine honours, its routing budget included', async function () {
+		const s = await wireScene('limits');
+		const service = new BoltzService({
+			client: s.client,
+			chain: new ClientChainView(s.chain),
+			provider: s.peer.idHex,
+			network: 'regtest'
+		});
+		const auth = new RpcAuth({
+			noMacaroons: true,
+			adminMacaroonPath: '',
+			readonlyMacaroonPath: ''
+		});
+		auth.init();
+		const server = await startBoltzServer({
+			service,
+			auth,
+			host: '127.0.0.1',
+			port: 0,
+			credentials: grpc.ServerCredentials.createInsecure()
+		});
+		const rpc = boltzClient(
+			`127.0.0.1:${server.port}`,
+			grpc.credentials.createInsecure()
+		);
+		const call = <T>(method: string, request: object): Promise<T> =>
+			new Promise<T>((resolve, reject) =>
+				rpc[method](request, (err: Error | null, res: T) =>
+					err ? reject(err) : resolve(res)
+				)
+			);
+		try {
+			// The engine charges 50 flat, 2000 ppm, a 300 sat miner fee and a
+			// 1000 ppm routing budget on the net amount: 380 sat at its 10 000
+			// sat minimum, which with roux's 100 sat slack leaves 9 520. No fee
+			// formula outside the engine knows that budget.
+			const pair = await call<PairInfo>('GetPairInfo', { type: 'SUBMARINE' });
+			expect(pair.limits.minimal).to.equal(9_520);
+			const quote = await call<GetSwapQuoteResponse>('GetSwapQuote', {
+				type: 'SUBMARINE',
+				send_amount: 10_000
+			});
+			expect(quote.receive_amount).to.equal(9_520);
+			expect(quote.boltz_fee + quote.network_fee).to.equal(480);
+			// The advertised minimum is creatable, though the fee probes for it
+			// start below the engine's own minimum.
+			const smallest = await call<CreateSwapResponse>('CreateSwap', {
+				amount: pair.limits.minimal
+			});
+			expect(smallest.expected_amount).to.equal(10_000);
+			expect(
+				s.client.swaps.submarine.get(smallest.id)!.record().invoiceAmountMsat
+			).to.equal('9520000');
 		} finally {
 			rpc.close();
 			await server.close(200);

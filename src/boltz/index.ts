@@ -4,7 +4,12 @@
  * host that wires its own client, chain or transport.
  */
 
-export { startBoltzDaemon, buildDaemonClient, packageVersion } from './daemon';
+export {
+	startBoltzDaemon,
+	buildDaemonClient,
+	lndMacaroonHex,
+	packageVersion
+} from './daemon';
 export type { IBoltzDaemon, IBoltzDaemonOptions } from './daemon';
 export {
 	BOLTZ_DAEMON_USAGE,

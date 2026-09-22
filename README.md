@@ -237,7 +237,8 @@ An LSP running beignet older than PR #734 declines a hop-mode intent when it cha
    provider = "02abc...@provider.example:9735"   # the beignet provider
 
    [Roux.LND]            # boltzd speaks gRPC to LND; roux uses its REST port
-   restPort = 8080       # with the same [LND] macaroon and certificate
+   restPort = 8080       # with the same [LND] certificate, and its macaroon
+                         # as a path or inline hex, as boltzd takes it
 
    [Roux.Bitcoind]       # the chain source for claims and refunds
    cookie = "~/.bitcoin/.cookie"   # or user / pass; host and port default by network

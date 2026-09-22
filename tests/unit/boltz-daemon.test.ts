@@ -53,6 +53,7 @@ interface IScene {
 	chain: MockChain;
 	payer: FakePayer;
 	funder: FakeFunder;
+	storage: MemoryStorage;
 	admin: string;
 	readonly: string;
 	stops: number;
@@ -141,6 +142,7 @@ async function scene(): Promise<IScene> {
 		chain,
 		payer,
 		funder,
+		storage,
 		admin,
 		readonly,
 		call: <T>(
@@ -371,6 +373,50 @@ describe('roux-boltzd over gRPC', function () {
 			expect(err.details).to.match(detail);
 		}
 		expect(s.client.swaps.reverse.list()).to.have.length(0);
+	});
+
+	it('the advertised limits are the ones a swap can be created at, both directions', async function () {
+		// The provider serves 10 000 to 1 000 000 sat on chain and refuses
+		// anything outside, so the fee probes for an amount at either end
+		// fall outside its range before they are clamped.
+		const submarine = await s.call<PairInfo>('GetPairInfo', {
+			type: 'SUBMARINE'
+		});
+		expect(submarine.limits.minimal).to.equal(
+			10_000 - providerFee(10_000) - 100
+		);
+		const atMinimum = await s.call<CreateSwapResponse>('CreateSwap', {
+			amount: submarine.limits.minimal
+		});
+		expect(atMinimum.expected_amount).to.equal(10_000);
+		expect(
+			s.client.swaps.submarine.get(atMinimum.id)!.record().invoiceAmountMsat
+		).to.equal(`${submarine.limits.minimal}000`);
+
+		const reverse = await s.call<PairInfo>('GetPairInfo', { type: 'REVERSE' });
+		expect(reverse.limits.maximal).to.equal(1_000_000 + providerFee(1_000_000));
+		const atMaximum = await s.call<CreateReverseSwapResponse>(
+			'CreateReverseSwap',
+			{ amount: reverse.limits.maximal, external_pay: true }
+		);
+		expect(
+			s.client.swaps.reverse.get(atMaximum.id)!.record().onchainAmountSat
+		).to.equal('1000000');
+
+		// Outside them, the provider's own limit is named.
+		const small = await rejection(s.call('CreateSwap', { amount: 1_000 }));
+		expect(small.code).to.equal(grpc.status.INVALID_ARGUMENT);
+		expect(small.details).to.match(/below the provider's minimum 10000/);
+		const large = await rejection(
+			s.call('CreateReverseSwap', { amount: 5_000_000 })
+		);
+		expect(large.code).to.equal(grpc.status.INVALID_ARGUMENT);
+		expect(large.details).to.match(/above the provider's maximum 1000000/);
+		const quoted = await s.call<GetSwapQuoteResponse>('GetSwapQuote', {
+			type: 'SUBMARINE',
+			send_amount: 10_000
+		});
+		expect(quoted.receive_amount).to.equal(submarine.limits.minimal);
 	});
 
 	it('CreateSwap from the node wallet: tx_id returned, the provider pays, SETTLED', async function () {
@@ -604,32 +650,35 @@ describe('roux-boltzd over gRPC', function () {
 	});
 
 	describe('startBoltzDaemon', function () {
+		/** The daemon's own config, with the parts it will not use stubbed. */
+		const daemonConfig = (dir: string): IBoltzDaemonConfig => ({
+			dataDir: dir,
+			configFile: path.join(dir, 'boltz.toml'),
+			network: 'regtest',
+			node: 'lnd',
+			rpc: {
+				host: '127.0.0.1',
+				port: 0,
+				tlsCertPath: path.join(dir, 'tls.cert'),
+				tlsKeyPath: path.join(dir, 'tls.key'),
+				noTls: false,
+				noMacaroons: false,
+				adminMacaroonPath: path.join(dir, 'macaroons', 'admin.macaroon'),
+				readonlyMacaroonPath: path.join(dir, 'macaroons', 'readonly.macaroon')
+			},
+			bitcoind: { host: '127.0.0.1', port: 1, user: 'u', pass: 'p' },
+			provider: `${s.provider.id}@127.0.0.1:9735`,
+			storePath: path.join(dir, 'unused.json'),
+			policy: {}
+		});
+
 		it('resumes stored swaps, mints macaroons, serves, and resolves stopRequested on Stop', async function () {
 			// A swap from a previous run, left in the store.
 			const created = await s.call<CreateSwapResponse>('CreateSwap', {
 				amount: 20_000
 			});
 			const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'roux-boltzd-'));
-			const config: IBoltzDaemonConfig = {
-				dataDir: dir,
-				configFile: path.join(dir, 'boltz.toml'),
-				network: 'regtest',
-				node: 'lnd',
-				rpc: {
-					host: '127.0.0.1',
-					port: 0,
-					tlsCertPath: path.join(dir, 'tls.cert'),
-					tlsKeyPath: path.join(dir, 'tls.key'),
-					noTls: false,
-					noMacaroons: false,
-					adminMacaroonPath: path.join(dir, 'macaroons', 'admin.macaroon'),
-					readonlyMacaroonPath: path.join(dir, 'macaroons', 'readonly.macaroon')
-				},
-				bitcoind: { host: '127.0.0.1', port: 1, user: 'u', pass: 'p' },
-				provider: `${s.provider.id}@127.0.0.1:9735`,
-				storePath: path.join(dir, 'unused.json'),
-				policy: {}
-			};
+			const config = daemonConfig(dir);
 			const logs: string[] = [];
 			const daemon = await startBoltzDaemon(config, {
 				client: s.client,
@@ -668,6 +717,73 @@ describe('roux-boltzd over gRPC', function () {
 				await daemon.stopRequested;
 				rpc.close();
 			} finally {
+				await daemon.close();
+			}
+		});
+
+		it('retries a resume the chain was down for, so no swap is left unattended', async function () {
+			// A funded swap the provider never pays, left by a previous run.
+			const created = await s.call<CreateSwapResponse>('CreateSwap', {
+				amount: 50_000,
+				send_from_internal: true
+			});
+			s.chain.mine(1);
+			await waitFor(
+				() => s.client.swaps.submarine.get(created.id)!.state === 'FUNDED',
+				'funded'
+			);
+			const refundHeight = s.client.swaps.submarine
+				.get(created.id)!
+				.record().refundHeight;
+			await s.client.close();
+
+			// A fresh client over the same store, as a restart would build.
+			const restarted = new BeignetClient({
+				link: s.link,
+				network: 'regtest',
+				storage: s.storage,
+				swaps: {
+					payer: s.payer,
+					funder: s.funder,
+					chain: s.chain,
+					policy: { statusPollMs: 0, chainPollMs: 5, replyTimeoutMs: 500 }
+				}
+			});
+			// Bitcoin Core is down while the daemon starts.
+			const height = s.chain.currentHeight.bind(s.chain);
+			let down = true;
+			s.chain.currentHeight = async (): Promise<number> => {
+				if (down) throw new Error('bitcoind is down');
+				return height();
+			};
+			const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'roux-boltzd-'));
+			const logs: Array<Record<string, unknown>> = [];
+			const daemon = await startBoltzDaemon(daemonConfig(dir), {
+				client: restarted,
+				chain: s.chain,
+				resumeRetryMs: 20,
+				log: (action, data) => logs.push({ action, ...data })
+			});
+			try {
+				const resumed = logs.filter((l) => l.action === 'boltz_swaps_resumed');
+				expect(resumed).to.have.length(1);
+				expect((resumed[0].errors as unknown[]).length).to.be.greaterThan(0);
+				// The swap is past its refund height and nobody is driving it.
+				s.chain.height = refundHeight + 1;
+				await new Promise((r) => setTimeout(r, 50));
+				expect(s.chain.broadcasts).to.have.length(0);
+
+				// Core comes back: the retry resumes it, and the loop refunds.
+				down = false;
+				await waitFor(
+					() =>
+						restarted.swaps.submarine.get(created.id)!.state ===
+						'REFUND_BROADCAST',
+					'the retried resume drives the refund',
+					10_000
+				);
+			} finally {
+				s.chain.currentHeight = height;
 				await daemon.close();
 			}
 		});

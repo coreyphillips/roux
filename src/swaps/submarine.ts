@@ -44,7 +44,11 @@ import { IPeerLink } from '../link/types';
 import { exchange } from '../link/exchange';
 import { SubmarineSwapStore } from './store';
 import { feeForRate, bumpedFeeRate, replacementFloor } from './fees';
-import { isClaimWitness, verifyFundingOutput } from './verify';
+import {
+	assertNativeSegwit,
+	isClaimWitness,
+	verifyFundingOutput
+} from './verify';
 import {
 	ISubmarineSwapChange,
 	ISubmarineSwapRecord,
@@ -269,6 +273,35 @@ export class SubmarineSwap {
 		});
 		await this.adoptFunding(sent.txidHex, sent.vout, 'funder', sent.rawHex);
 		return sent.txidHex;
+	}
+
+	/**
+	 * Send a future refund somewhere else. Only while no refund attempt
+	 * exists: an attempt already out pays the old destination, and every
+	 * replacement of it is built from the record. A pass in flight finishes
+	 * first, so it cannot persist an attempt built for the old destination
+	 * after this one changed it.
+	 */
+	async setRefundDestination(script: Buffer): Promise<void> {
+		if (this.ticking) await this.ticking.catch(() => undefined);
+		if (isTerminalSubmarineSwapState(this.rec.state)) {
+			throw new SwapError(
+				`cannot redirect a swap in ${this.rec.state}`,
+				'state'
+			);
+		}
+		if ((this.rec.refund?.attempts.length ?? 0) > 0) {
+			throw new SwapError(
+				'a refund attempt already pays the current destination',
+				'state'
+			);
+		}
+		const destination = assertNativeSegwit(script);
+		this.persist({ refundDestinationScriptHex: destination.toString('hex') });
+		this.deps.log('swap_refund_destination_set', {
+			swapId: this.rec.swapIdHex,
+			script: destination.toString('hex')
+		});
 	}
 
 	/** A funding the host made by hand (or one lost between call and reply). */

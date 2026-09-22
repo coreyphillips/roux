@@ -122,8 +122,9 @@ export interface IResumeReport {
 export class SwapClient {
 	readonly reverse: ReverseSwapClient;
 	readonly submarine: SubmarineSwapClient;
+	/** The policy in force: SWAP_DEFAULT_POLICY with the caller's overrides. */
+	readonly policy: ISwapClientPolicy;
 	private readonly log: RouxLog;
-	private readonly policy: ISwapClientPolicy;
 
 	constructor(private readonly options: ISwapClientOptions) {
 		this.log = options.log ?? noopLog;
@@ -378,6 +379,7 @@ export class ReverseSwapClient {
 			onchainAmountSat: amountSat.toString(),
 			invoiceAmountMsat: terms.invoiceAmountMsat.toString(),
 			totalFeeSat: terms.totalFeeSat.toString(),
+			minerFeeSat: ack.terms!.minerFeeSat.toString(),
 			bolt11: ack.terms!.bolt11,
 			invoiceExpiresAt: terms.invoiceExpiresAt,
 			providerFundingConfirmations: ack.terms!.fundingConfirmations,

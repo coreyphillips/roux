@@ -254,6 +254,40 @@ describe('SubmarineSwap lifecycle', function () {
 		expect(s.logs).to.include('swap_refunded');
 	});
 
+	it('setRefundDestination redirects a future refund, and is refused once an attempt exists', async function () {
+		const s = scene();
+		const swap = await confirmed(s);
+		const rec0 = swap.record();
+		const elsewhere = bitcoin.payments.p2wpkh({
+			hash: Buffer.alloc(20, 7)
+		}).output!;
+		// Not native segwit: refused, nothing changed.
+		const p2pkh = bitcoin.payments.p2pkh({ hash: Buffer.alloc(20, 7) }).output!;
+		expect((await failure(swap.setRefundDestination(p2pkh))).code).to.equal(
+			'destination'
+		);
+		await swap.setRefundDestination(elsewhere);
+		expect(stored(s, swap.swapIdHex).refundDestinationScriptHex).to.equal(
+			elsewhere.toString('hex')
+		);
+		mineTo(s, rec0.refundHeight);
+		await swap.tick();
+		const rec = swap.record();
+		expect(rec.state).to.equal('REFUND_BROADCAST');
+		const tx = bitcoin.Transaction.fromHex(rec.refund!.attempts[0].rawHex);
+		expect(tx.outs[0].script.equals(elsewhere)).to.equal(true);
+		// An attempt is out: its replacements must pay the same place.
+		const err = await failure(
+			swap.setRefundDestination(
+				Buffer.from(rec0.refundDestinationScriptHex, 'hex')
+			)
+		);
+		expect(err.code).to.equal('state');
+		expect(swap.record().refundDestinationScriptHex).to.equal(
+			elsewhere.toString('hex')
+		);
+	});
+
 	it('never refunds while the invoice holds an HTLC; refunds once released; settles if it settles', async function () {
 		const s = scene();
 		const swap = await confirmed(s);

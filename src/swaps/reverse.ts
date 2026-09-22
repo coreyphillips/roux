@@ -3,6 +3,9 @@
  *
  *   create (client.ts)   record persisted CREATED, nothing paid
  *   pay()                record PAYING BEFORE the payer is asked
+ *   expectExternalPayment()
+ *                        PAYING without a payer: someone else pays the
+ *                          invoice, and a verified funding is the proof
  *   tick()               one reconciliation pass; run() loops it:
  *                          track the payment,
  *                          find the funding (provider status hint, verified
@@ -155,6 +158,9 @@ export class ReverseSwap {
 		if (this.rec.state !== 'CREATED' && this.rec.state !== 'PAYING') {
 			throw new SwapError(`cannot pay a swap in ${this.rec.state}`, 'state');
 		}
+		if (this.rec.payment?.external) {
+			throw new SwapError('this swap is paid externally', 'state');
+		}
 		const invoiceSat = BigInt(this.rec.invoiceAmountMsat) / 1000n;
 		const ppmFee =
 			(invoiceSat * BigInt(this.deps.policy.maxLightningFeePpm)) / 1_000_000n;
@@ -196,6 +202,26 @@ export class ReverseSwap {
 		return this.paying;
 	}
 
+	/**
+	 * Someone else pays the invoice (another wallet, another node): the
+	 * payer is never asked, and the swap follows the chain alone. The
+	 * provider funds only once its hold invoice is paid in full, so a
+	 * verified funding is the payment's proof; nothing funded past the
+	 * refund height, the swap is over.
+	 */
+	expectExternalPayment(): void {
+		if (this.rec.state !== 'CREATED' || this.paying) {
+			throw new SwapError(
+				`cannot hand a swap in ${this.rec.state} to an external payer`,
+				'state'
+			);
+		}
+		this.persist({
+			state: 'PAYING',
+			payment: { startedAt: Date.now(), status: 'pending', external: true }
+		});
+	}
+
 	/** After a restart: the node already knows this payment (resume). */
 	adoptPayment(status: ISwapPaymentStatus): void {
 		if (this.rec.state === 'CREATED') {
@@ -218,7 +244,7 @@ export class ReverseSwap {
 	private async refreshPayment(): Promise<void> {
 		const known = this.rec.payment?.status;
 		if (known === 'succeeded' || known === 'failed') return;
-		if (this.rec.state === 'CREATED') return;
+		if (this.rec.state === 'CREATED' || this.rec.payment?.external) return;
 		try {
 			const status = await this.deps.payer.trackPayment(
 				Buffer.from(this.rec.paymentHashHex, 'hex')
@@ -295,7 +321,12 @@ export class ReverseSwap {
 				});
 				return;
 			}
-			if (tip > this.rec.refundHeight && payment !== 'pending') {
+			// An external payment has no node to report it: the height alone
+			// closes the window, since the provider can no longer fund.
+			if (
+				tip > this.rec.refundHeight &&
+				(payment !== 'pending' || this.rec.payment?.external)
+			) {
 				this.persist({ state: 'EXPIRED' });
 				this.deps.log('swap_expired', { swapId: this.rec.swapIdHex });
 			}
@@ -815,8 +846,9 @@ export class ReverseSwap {
 		if (this.running) return this.running;
 		this.running = (async (): Promise<IReverseSwapRecord> => {
 			if (
-				this.rec.state === 'CREATED' ||
-				(this.rec.state === 'PAYING' && !this.paying)
+				!this.rec.payment?.external &&
+				(this.rec.state === 'CREATED' ||
+					(this.rec.state === 'PAYING' && !this.paying))
 			) {
 				const known = await this.deps.payer.trackPayment(
 					Buffer.from(this.rec.paymentHashHex, 'hex')

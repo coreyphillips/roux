@@ -305,6 +305,8 @@ export interface IReverseSwapRecord {
 	onchainAmountSat: string;
 	invoiceAmountMsat: string;
 	totalFeeSat: string;
+	/** The part of totalFeeSat that pays the provider's funding (absent on older records). */
+	minerFeeSat?: string;
 	bolt11: string;
 	invoiceExpiresAt: number;
 	providerFundingConfirmations: number;
@@ -315,6 +317,8 @@ export interface IReverseSwapRecord {
 		status: ISwapPaymentStatus['status'];
 		preimageHex?: string;
 		failureReason?: string;
+		/** Paid by someone else: the payer is never asked, the chain decides. */
+		external?: boolean;
 	};
 	funding?: {
 		txidHex: string;

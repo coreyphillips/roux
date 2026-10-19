@@ -19,7 +19,7 @@ supported wallet / node -> roux -> enabled beignet liquidity service
 | **Reverse swap** (`client.swaps.reverse`)   | a node with Lightning balance to move on chain | a provider with `BEIGNET_SWAPS` on              | Your node pays a hold invoice. The provider funds a P2WSH contract claimable with your key and preimage. Roux verifies funding, waits for the required confirmations and claims to your chosen on-chain address before its safety deadline. The claim reveals the preimage that settles your Lightning payment. |
 | **Submarine swap** (`client.swaps.submarine`) | a node with on-chain coins that wants Lightning balance | a provider with `BEIGNET_SWAP_SUBMARINE` on | Your node mints an invoice. Roux verifies the contract the provider offers (built from your refund key and the provider's claim key) and funds it from your wallet. The provider pays your invoice under an absolute HTLC expiry ceiling and claims the coins with the preimage. Unpaid past the refund height, roux refunds you, never while your node still holds the provider's HTLC. |
 
-All four use beignet's custom peer protocols. Roux reuses beignet's codecs and messages; the provider must support the requested protocol. This is not a Boltz API client.
+All four use beignet's custom peer protocols. Roux reuses beignet's codecs and messages; the provider must support the requested protocol. This is not a Boltz API client, but `roux-boltzd` serves boltz-client's gRPC API over these swaps, so a `boltzd` operator can switch without changing their tooling (see [Switching from boltz-client](#switching-from-boltz-client)).
 
 ## Liquidity services and swap scope
 
@@ -225,6 +225,43 @@ A beignet LSP collects its JIT opening fee one of two ways, and the ack tells ro
 
 An LSP running beignet older than PR #734 declines a hop-mode intent when it charges a fee; roux surfaces that as `JitDeclinedError` with the LSP's reason. A zero-fee LSP serves either kind.
 
+## Switching from boltz-client
+
+`roux-boltzd` serves [boltz-client](https://github.com/BoltzExchange/boltz-client)'s gRPC API (`boltzrpc.Boltz`, vendored from v2.12.5 in `proto/`) and runs the swaps with roux against a beignet provider. `boltzcli` and gRPC code written for `boltzd` keep working for BTC submarine and reverse swaps. It uses the same port, data directory, `boltz.toml`, TLS pair and macaroons.
+
+1. Let `boltzd` finish its pending swaps. They are swaps with Boltz, and roux cannot complete them.
+2. Stop `boltzd`, then add a `[Roux]` section to `~/.boltz/boltz.toml`:
+
+   ```toml
+   [Roux]
+   provider = "02abc...@provider.example:9735"   # the beignet provider
+
+   [Roux.LND]            # boltzd speaks gRPC to LND; roux uses its REST port
+   restPort = 8080       # with the same [LND] certificate, and its macaroon
+                         # as a path or inline hex, as boltzd takes it
+
+   [Roux.Bitcoind]       # the chain source for claims and refunds
+   cookie = "~/.bitcoin/.cookie"   # or user / pass; host and port default by network
+   ```
+
+   For CLN, set `[Roux.CLN]` with `host`, `port` (clnrest, default 3010) and `rune` or `runeFile`. `[Roux.Policy]` overrides any `SWAP_DEFAULT_POLICY` value. `src/boltz/config.ts` lists every key.
+3. Run `roux-boltzd`. Flags use `boltzd`'s names (`--datadir`, `--network`, `--rpc.port`, `--rpc.no-tls`, ...), and `--roux.provider` sets the provider. Unresolved swaps from the swap store (`<datadir>/roux-swaps.json`, a wallet file) resume on start.
+
+Served: `GetInfo`, `GetPairs`, `GetPairInfo`, `GetSwapQuote`, `GetServiceInfo`, `CreateSwap`, `CreateReverseSwap`, `GetSwapInfo`, `GetSwapInfoStream`, `ListSwaps`, `GetStats`, `RefundSwap` and `Stop`. Every other RPC (wallets, chain swaps, Liquid, tenants, `BakeMacaroon`, the swap mnemonic, autoswap) answers `UNIMPLEMENTED` with the reason. What differs from `boltzd`, each enforced with a clear status:
+
+- **A submarine swap pays an invoice of your own node.** It is either minted for the amount or supplied as a bolt11 the node reports open. Roux refuses to refund while the node holds the provider's HTLC, and only your own node can report that. Third-party invoices, LNURL, Lightning addresses, BOLT 12 and any-amount swaps are refused.
+- **`send_from_internal` funds from the node's own wallet.** Roux has no internal wallets, so `wallet_id` is refused. A refund goes to `refund_address`, or to a fresh node address.
+- **Zero-conf is never taken.** A claim waits for `minFundingConfirmations`, at least one. `accept_zero_conf` is accepted and logged, and without `return_immediately` the call still waits for the claim, as `boltzd`'s does.
+- **`chan_ids` and magic routing hints are refused.** For a reverse swap, the invoice description and expiry are the provider's to set, and are ignored.
+- **Amounts count as in `boltzd`, on the Lightning side.** `CreateSwap.amount` is the invoice you receive, and `CreateReverseSwap.amount` the invoice you pay. Roux finds the on-chain amount by re-quoting the provider, so the minted invoice is exact. A reverse invoice can come out a satoshi under the request where the fee steps. Swap ids are beignet's swap ids. `redeem_script` is the P2WSH witness script.
+- **A reverse swap's claim key and preimage never leave through the readonly macaroon.** Private keys and preimages are returned to the admin macaroon only.
+- **The REST proxy (port 9003) is not served**, only gRPC.
+- **TLS:** the daemon reuses `tls.cert` and `tls.key` when both exist, but does not generate them. Without them it serves plaintext on a loopback address only, which is what `boltzcli` expects when `tls.cert` is absent. A macaroon file that does not exist is minted. Presented macaroons are compared byte for byte with the files, and tenant macaroons baked by `boltzd` are refused.
+
+`src/boltz/mapping.ts` documents how roux's swap states map to `boltzd`'s `state` and Boltz `status` names. `import ... from 'roux/boltz'` gives the pieces (`BoltzService`, `startBoltzServer`, `RpcAuth`, `startBoltzDaemon`) for a host that wires its own client, chain or transport.
+
+Wallets that call the Boltz REST API (`api.boltz.exchange/v2`, through Boltz Core or Boltz Rust) cannot switch the same way. Those clients build their own claims and refunds from a Taproot swap tree and co-sign with MuSig2, while beignet's contract is a P2WSH HTLC. That compatibility would be provider work in beignet, not roux, and is designed in [beignet#916](https://github.com/coreyphillips/beignet/issues/916).
+
 ## Not covered
 
 - **Liquidity ads (bLIP-51)** are a standard protocol; a dual-funding node already negotiates them with beignet without roux.
@@ -264,6 +301,9 @@ Wallet:     KeyedUtxoWallet({ network, coins, changeAddress | changeScript, getT
             LndWallet({ host, port, macaroonHex, network, ca? | rejectUnauthorized?, minConfs? })
             ClnWallet({ host, port, rune, network, getTransaction?, reserveBlocks? })
 Storage:    MemoryStorage(), FileStorage(path)          also 'roux/storage'; fund-moving calls need one you chose
+Boltz:      roux-boltzd [--datadir ~/.boltz] ...        boltz-client's gRPC API; 'roux/boltz' for the pieces
+            ReverseSwap.expectExternalPayment()         someone else pays the invoice; the chain decides
+            SubmarineSwap.setRefundDestination(script)  before any refund attempt
 ```
 
 `log` is a `(action, data) => void` sink; `consoleLog()` prints to stderr. Amounts are satoshis, `number` or `bigint` in, `bigint` out.

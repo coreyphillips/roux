@@ -25,6 +25,10 @@
 			"types": "./dist/storage.d.ts",
 			"default": "./dist/storage.js"
 		},
+		"./boltz": {
+			"types": "./dist/boltz/index.d.ts",
+			"default": "./dist/boltz/index.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"repository": {
@@ -35,8 +39,12 @@
 	"bugs": {
 		"url": "https://github.com/coreyphillips/roux/issues"
 	},
+	"bin": {
+		"roux-boltzd": "dist/boltz/bin.js"
+	},
 	"files": [
 		"dist/",
+		"proto/",
 		"README.md",
 		"LICENSE"
 	],
@@ -60,6 +68,7 @@
 		"example:cln-reverse-swap": "TS_NODE_TRANSPILE_ONLY=1 ts-node example/cln-reverse-swap.ts",
 		"example:lnd-submarine-swap": "TS_NODE_TRANSPILE_ONLY=1 ts-node example/lnd-submarine-swap.ts",
 		"example:cln-submarine-swap": "TS_NODE_TRANSPILE_ONLY=1 ts-node example/cln-submarine-swap.ts",
+		"boltzd": "TS_NODE_TRANSPILE_ONLY=1 ts-node src/boltz/bin.ts",
 		"test:swap:live": "TS_NODE_TRANSPILE_ONLY=1 mocha --exit --timeout 900000 -r ts-node/register 'tests/wire/lnd-reverse-swap-live.test.ts' 'tests/wire/cln-reverse-swap-live.test.ts' 'tests/wire/lnd-submarine-swap-live.test.ts' 'tests/wire/cln-submarine-swap-live.test.ts'",
 		"link:beignet": "npm link ../synonym/beignet"
 	},
@@ -74,7 +83,9 @@
 		"bolt8",
 		"swap",
 		"reverse-swap",
-		"submarine-swap"
+		"submarine-swap",
+		"boltz",
+		"boltz-client"
 	],
 	"author": "coreyphillips",
 	"license": "MIT",
@@ -83,8 +94,11 @@
 	},
 	"dependencies": {
 		"@bitcoinerlab/secp256k1": "1.0.5",
+		"@grpc/grpc-js": "1.14.5",
+		"@grpc/proto-loader": "0.8.1",
 		"beignet": "^0.16.0",
-		"bitcoinjs-lib": "6.1.4"
+		"bitcoinjs-lib": "6.1.4",
+		"smol-toml": "1.8.0"
 	},
 	"peerDependencies": {
 		"ws": ">=8"

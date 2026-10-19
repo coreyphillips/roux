@@ -494,6 +494,66 @@ describe('ReverseSwap lifecycle', function () {
 		});
 	});
 
+	describe('paid externally', function () {
+		it('never asks the payer, claims once the provider funds, and records the miner fee', async function () {
+			const s = scene();
+			const swap = await s.client.reverse.create(s.provider.id, {
+				amountSat: 100_000
+			});
+			expect(swap.record().minerFeeSat).to.equal('400');
+			swap.expectExternalPayment();
+			expect(swap.state).to.equal('PAYING');
+			expect(swap.record().payment).to.include({
+				status: 'pending',
+				external: true
+			});
+			expect(() => swap.pay()).to.throw(/paid externally/);
+			const running = swap.run();
+			await new Promise((r) => setTimeout(r, 20));
+			expect(s.payer.calls).to.have.length(0);
+			// Whoever paid, the provider funds; the chain is the proof.
+			s.provider.fund(s.chain, swap.swapIdHex, { height: 1000 });
+			swap.poke();
+			await new Promise((r) => setTimeout(r, 20));
+			expect(swap.state).to.equal('CLAIM_BROADCAST');
+			s.chain.mine(1);
+			swap.poke();
+			const done = await running;
+			expect(done.state).to.equal('CLAIMED');
+			expect(s.payer.calls).to.have.length(0);
+			expect(
+				s.payer.tracked.filter((h) => h === done.paymentHashHex)
+			).to.have.length(0);
+		});
+
+		it('expires unfunded past the refund height, and resumes without paying', async function () {
+			const s = scene();
+			const swap = await s.client.reverse.create(s.provider.id, {
+				amountSat: 100_000
+			});
+			swap.expectExternalPayment();
+			const report = await s.reopen().reverse.resume({ run: true });
+			expect(report.needsPayment).to.have.length(0);
+			expect(report.resumed.map((r) => r.swapIdHex)).to.deep.equal([
+				swap.swapIdHex
+			]);
+			await new Promise((r) => setTimeout(r, 20));
+			expect(s.payer.calls).to.have.length(0);
+			await swap.tick();
+			expect(swap.state).to.equal('PAYING');
+			s.chain.mine(swap.record().refundHeight - s.chain.height + 1);
+			await swap.tick();
+			expect(swap.state).to.equal('EXPIRED');
+			await report.resumed[0].stop();
+		});
+
+		it('is refused once the swap is no longer CREATED', async function () {
+			const s = scene();
+			const swap = await started(s);
+			expect(() => swap.expectExternalPayment()).to.throw(/external payer/);
+		});
+	});
+
 	it('beignet extracts our preimage from the claim we broadcast', async function () {
 		const s = scene();
 		const swap = await started(s);

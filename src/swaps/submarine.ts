@@ -44,7 +44,11 @@ import { IPeerLink } from '../link/types';
 import { exchange } from '../link/exchange';
 import { SubmarineSwapStore } from './store';
 import { feeForRate, bumpedFeeRate, replacementFloor } from './fees';
-import { isClaimWitness, verifyFundingOutput } from './verify';
+import {
+	assertNativeSegwit,
+	isClaimWitness,
+	verifyFundingOutput
+} from './verify';
 import {
 	ISubmarineSwapChange,
 	ISubmarineSwapRecord,
@@ -94,6 +98,7 @@ export class SubmarineSwap {
 	private running: Promise<ISubmarineSwapRecord> | null = null;
 	private ticking: Promise<void> | null = null;
 	private funding: Promise<string> | null = null;
+	private refunding: Promise<string> | null = null;
 	private wake: (() => void) | null = null;
 
 	constructor(
@@ -269,6 +274,37 @@ export class SubmarineSwap {
 		});
 		await this.adoptFunding(sent.txidHex, sent.vout, 'funder', sent.rawHex);
 		return sent.txidHex;
+	}
+
+	/**
+	 * Send a future refund somewhere else. Only while no refund attempt
+	 * exists: an attempt already out pays the old destination, and every
+	 * replacement of it is built from the record. A pass in flight, and a
+	 * refund already building its bytes, both finish first, so neither can
+	 * broadcast to the old destination after this one changed it.
+	 */
+	async setRefundDestination(script: Buffer): Promise<void> {
+		for (const inFlight of [this.ticking, this.refunding]) {
+			if (inFlight) await inFlight.catch(() => undefined);
+		}
+		if (isTerminalSubmarineSwapState(this.rec.state)) {
+			throw new SwapError(
+				`cannot redirect a swap in ${this.rec.state}`,
+				'state'
+			);
+		}
+		if ((this.rec.refund?.attempts.length ?? 0) > 0) {
+			throw new SwapError(
+				'a refund attempt already pays the current destination',
+				'state'
+			);
+		}
+		const destination = assertNativeSegwit(script);
+		this.persist({ refundDestinationScriptHex: destination.toString('hex') });
+		this.deps.log('swap_refund_destination_set', {
+			swapId: this.rec.swapIdHex,
+			script: destination.toString('hex')
+		});
 	}
 
 	/** A funding the host made by hand (or one lost between call and reply). */
@@ -747,10 +783,26 @@ export class SubmarineSwap {
 	 * Build, persist, then broadcast a refund. Preparation (bytes, fee,
 	 * signature) first; the judgement last: the height, the unspent output,
 	 * and the invoice as the node reports it NOW.
+	 *
+	 * One refund at a time: a second call while one is in flight joins it
+	 * rather than building a competing spend, and its options are the first
+	 * caller's. `setRefundDestination` waits for it, so a refund cannot
+	 * broadcast to the destination this one just replaced.
 	 */
-	async refund(
+	refund(
 		opts: { feeRateSatPerVb?: number; allowUnknownInvoice?: boolean } = {}
 	): Promise<string> {
+		if (this.refunding) return this.refunding;
+		this.refunding = this.refundOnce(opts).finally(() => {
+			this.refunding = null;
+		});
+		return this.refunding;
+	}
+
+	private async refundOnce(opts: {
+		feeRateSatPerVb?: number;
+		allowUnknownInvoice?: boolean;
+	}): Promise<string> {
 		if (
 			this.rec.state !== 'FUNDING' &&
 			this.rec.state !== 'FUNDED' &&
